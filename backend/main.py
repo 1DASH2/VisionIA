@@ -11,6 +11,14 @@ from models.registry import (
     load_model,
     model_status,
 )
+from fastapi import Depends
+from pydantic import BaseModel
+from auth import (
+    init_auth_db,
+    authenticate,
+    create_token,
+    current_user,
+)
 
 MODEL_NAME = os.getenv('VISION_MODEL', 'yolo11n.pt')
 DB = os.getenv('VISION_DB', 'vision_events.db')
@@ -29,6 +37,7 @@ def connect():
 async def lifespan(app: FastAPI):
     global model, model_error
     with connect(): pass
+    init_auth_db()
     try:
         model = load_model("general")
     except Exception as exc:
@@ -44,7 +53,7 @@ app = FastAPI(
 from fastapi.middleware.cors import CORSMiddleware
 
 app.add_middleware(
-    CORSMiddleware,
+       CORSMiddleware,
     allow_origins=[
         "http://localhost:5173",
         "http://localhost:5174",
@@ -54,11 +63,56 @@ app.add_middleware(
         "http://127.0.0.1:5175",
     ],
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PATCH", "OPTIONS"],
+    allow_methods=["*"],
     allow_headers=["*"],
 )
 
-@app.get('/api/v1/health')
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+@app.post("/api/v1/auth/login")
+def login(data: LoginRequest):
+    user = authenticate(
+        data.username,
+        data.password,
+    )
+
+    if user is None:
+        raise HTTPException(
+            status_code=401,
+            detail="Usuario o contraseña incorrectos",
+        )
+
+    token = create_token(user)
+
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "expires_in": 7200,
+        "user": {
+            "id": user["id"],
+            "username": user["username"],
+            "role": user["role"],
+        },
+    }
+
+
+@app.get("/api/v1/auth/me")
+def me(user: dict = Depends(current_user)):
+    return {
+        "id": user["id"],
+        "username": user["username"],
+        "role": user["role"],
+    }
+
+
+@app.get(
+    "/api/v1/events",
+    dependencies=[Depends(current_user)],
+)
 
 @app.get("/api/v1/health")
 def health():

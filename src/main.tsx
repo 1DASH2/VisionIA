@@ -1,98 +1,2537 @@
-import BackendEvents from './BackendEvents';
-import LiveCamera from './LiveCamera';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { createRoot } from 'react-dom/client';
-import { Activity, AlertTriangle, ArrowDownToLine, ArrowRight, Bell, Box, Check, CheckCircle2, ChevronDown, Clock3, Database, Eye, FileText, Filter, HardHat, LayoutDashboard, Layers3, Menu, PackageCheck, Play, Plus, ScanLine, Search, Settings2, ShieldCheck, ShoppingBag, SlidersHorizontal, Sparkles, UploadCloud, X, Zap } from 'lucide-react';
-import { AreaChart, Area, ResponsiveContainer, CartesianGrid, XAxis, YAxis, Tooltip } from 'recharts';
-import './style.css';
-type Scenario = 'industrial' | 'warehouse' | 'quality' | 'retail'; type Page = 'dashboard' | 'analysis' | 'alerts' | 'history' | 'settings'; type Detection = { label: string; confidence: number; x: number; y: number; w: number; h: number; color: string }; type Alert = { id: string; analysisId: string; scenario: Scenario; message: string; severity: 'Alta' | 'Media'; status: 'Nueva' | 'Revisada' | 'Cerrada'; date: string }; type Analysis = { id: string; scenario: Scenario; mode: string; date: string; duration: number; detections: Detection[]; alerts: string[]; confidence: number };
-const scenarios: { id: Scenario; title: string; sub: string; icon: any; image: string; detections: Detection[]; message: string; severity: 'Alta' | 'Media' }[] = [
-    {
-        id: 'industrial', title: 'Seguridad industrial', sub: 'Detección de equipos de protección', icon: HardHat, image: 'https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=1400&q=85', detections: [{ label: 'Persona', confidence: .97, x: .28, y: .16, w: .29, h: .72, color: '#40c7f4' },
-        { label: 'Casco', confidence: .93, x: .35, y: .15, w: .12, h: .13, color: '#58dfb0' }, { label: 'Chaleco ausente', confidence: .87, x: .31, y: .38, w: .23, h: .35, color: '#ffb56b' }], message: 'Posible EPP incompleto: revisar uso de chaleco', severity: 'Alta'
-    },
-    {
-        id: 'warehouse', title: 'Almacén inteligente', sub: 'Monitoreo de zonas restringidas', icon: Box, image: 'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=1400&q=85', detections: [{ label: 'Pallet', confidence: .96, x: .13, y: .48, w: .29, h: .33, color: '#40c7f4' },
-        { label: 'Zona restringida', confidence: .91, x: .53, y: .30, w: .36, h: .54, color: '#ffb56b' }, { label: 'Caja', confidence: .94, x: .57, y: .42, w: .21, h: .23, color: '#58dfb0' }], message: 'Objeto identificado en zona restringida', severity: 'Alta'
-    },
-    {
-        id: 'quality', title: 'Control de calidad', sub: 'Inspección de defectos superficiales', icon: PackageCheck, image: 'https://images.unsplash.com/photo-1565043589221-1a6fd9ae45c7?w=1400&q=85', detections: [{ label: 'Producto', confidence: .98, x: .24, y: .24, w: .51, h: .49, color: '#40c7f4' }, { label: 'Defecto simulado', confidence: .89, x: .51, y: .40, w: .14, h: .16, color: '#ffb56b' }], message: 'Posible defecto superficial: requiere validación', severity: 'Media'
-    },
-    {
-        id: 'retail', title: 'Retail analytics', sub: 'Ocupación y patrones de actividad', icon: ShoppingBag, image: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=1400&q=85', detections: [{ label: 'Persona', confidence: .96, x: .26, y: .20, w: .18, h: .64, color: '#40c7f4' }, { label: 'Estante', confidence: .94, x: .56, y: .21, w: .32, h: .56, color: '#58dfb0' }, { label: 'Producto', confidence: .91, x: .62, y: .47, w: .13, h: .17, color: '#a99bff' }], message: 'Indicador de ocupación elevada en zona comercial', severity: 'Media'
-    }];
-const nav: { id: Page; label: string; icon: any }[] = [{ id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard }, { id: 'analysis', label: 'Análisis visual', icon: ScanLine }, { id: 'alerts', label: 'Centro de alertas', icon: Bell }, { id: 'history', label: 'Historial y reportes', icon: FileText }, { id: 'settings', label: 'Configuración', icon: Settings2 }];
-const KEY = 'vision-ai-enterprise-v1'; const read = () => { try { return JSON.parse(localStorage.getItem(KEY) || '{}') } catch { return {} } }; const initial = read(); const format = (s: string) => new Date(s).toLocaleString('es-PE', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }); const id = () => `VA-${Date.now().toString(36).toUpperCase()}`;
 
-function MotionDemo({ scenario, onEvent }: { scenario: Scenario; onEvent?: () => void }) {
-    const [playing, setPlaying] = useState(true), [tick, setTick] = useState(0), [speed, setSpeed] = useState(1);
-    useEffect(() => { setTick(0); setPlaying(true) }, [scenario]);
-    useEffect(() => { if (!playing) return; const timer = window.setInterval(() => setTick(t => (t + 0.035 * speed) % 12), 35); return () => window.clearInterval(timer) }, [playing, speed]);
-    const wave = (offset = 0) => Math.sin(tick * 1.3 + offset), travel = (tick * 10) % 115;
-    const person = (x: number, y: number, color: string, key: string) => <g key={key} transform={`translate(${x} ${y})`}><circle cx="0" cy="-30" r="9" fill="#f4c99e" /><path d="M-10 -20 L10 -20 L14 13 L-14 13Z" fill={color} /><path d="M-7 13 L-9 37 M7 13 L9 37 M-11 -14 L-20 5 M11 -14 L20 5" stroke="#a8b9d1" strokeWidth="7" strokeLinecap="round" /><rect x="-12" y="-41" width="24" height="7" rx="3" fill="#ffce55" /></g>;
-    return <div className="motion-demo"><div className="motion-head"><div><strong><span className="pulse-dot" /> SIMULACIÓN ANIMADA · {scenario === 'industrial' ? 'SEGURIDAD INDUSTRIAL' : scenario === 'warehouse' ? 'ALMACÉN INTELIGENTE' : scenario === 'quality' ? 'CONTROL DE CALIDAD' : 'RETAIL'}</strong><small>Escena sintética en movimiento · Eventos y confianza ilustrativos, no inferencia real</small></div><span className="motion-live">{playing ? '● EN REPRODUCCIÓN' : 'Ⅱ PAUSADO'}</span></div>
-        <svg viewBox="0 0 800 350" role="img" aria-label="Simulación visual animada del escenario seleccionado" className="motion-stage">
-            <defs><linearGradient id="sceneBg" x2="0" y2="1"><stop stopColor="#142c49" /><stop offset="1" stopColor="#091525" /></linearGradient><pattern id="floorGrid" width="55" height="35" patternUnits="userSpaceOnUse"><path d="M55 0H0V35" fill="none" stroke="#325071" strokeWidth="1" opacity=".55" /></pattern></defs>
-            <rect width="800" height="350" fill="url(#sceneBg)" /><path d="M0 250H800V350H0Z" fill="#152b43" /><path d="M0 250H800V350H0Z" fill="url(#floorGrid)" /><path d="M0 250H800" stroke="#4e7399" strokeWidth="2" />
-            {scenario === 'industrial' && <><path d="M35 250V80H160V250M610 250V80H740V250" stroke="#536c83" strokeWidth="13" fill="none" /><path d="M20 83H770" stroke="#6388a4" strokeWidth="9" /><rect x="570" y="170" width="175" height="80" rx="5" fill="#30445d" /><path d="M580 190H732M580 215H732" stroke="#6e8ea9" strokeWidth="3" />{person(210 + wave() * 72, 209, '#ffcc47', 'worker1')}{person(450 + Math.sin(tick * .8 + 2) * 55, 209, '#2e77b9', 'worker2')}<rect x={174 + wave() * 72} y="126" width="73" height="126" rx="6" fill="none" stroke="#49d6ee" strokeWidth="3" strokeDasharray="9 5" /><rect x={414 + Math.sin(tick * .8 + 2) * 55} y="126" width="73" height="126" rx="6" fill="none" stroke="#ffae68" strokeWidth="3" /><g transform={`translate(${415 + Math.sin(tick * .8 + 2) * 55} 106)`}><rect width="133" height="27" rx="5" fill="#ffb66c" /><text x="8" y="18" fontSize="12" fontWeight="700" fill="#172032">EPP INCOMPLETO</text></g><text x="30" y="38" fill="#a6c6e8" fontSize="15">MONITOREO DE PERSONAL · EPP</text></>}
-            {scenario === 'warehouse' && <><rect x="45" y="45" width="300" height="205" rx="5" fill="#1c354e" stroke="#54718b" strokeWidth="4" />{[0, 1, 2].map(i => <g key={i}><path d={`M55 ${95 + i * 55}H335`} stroke="#7793ac" strokeWidth="7" />{[0, 1, 2, 3].map(j => <rect key={j} x={65 + j * 67} y={62 + i * 55} width="49" height="30" fill="#a5784d" stroke="#d6aa73" strokeWidth="2" />)}</g>)}<rect x="495" y="75" width="270" height="176" fill="#f5a44416" stroke="#ffb76b" strokeDasharray="12 8" strokeWidth="3" /><text x="516" y="102" fill="#ffcd91" fontSize="16" fontWeight="700">ZONA RESTRINGIDA</text><g transform={`translate(${105 + travel * 4.5} 215)`}><rect x="-47" y="-43" width="108" height="53" rx="8" fill="#f0ae42" /><rect x="-23" y="-71" width="47" height="32" rx="5" fill="#91b5d0" /><circle cx="-25" cy="16" r="15" fill="#0b1525" stroke="#819ab3" strokeWidth="5" /><circle cx="42" cy="16" r="15" fill="#0b1525" stroke="#819ab3" strokeWidth="5" /><path d="M62 -75V12H109" fill="none" stroke="#d1e4ef" strokeWidth="7" /><rect x="70" y="-27" width="40" height="38" fill="#a8794a" /></g><text x="30" y="35" fill="#a6c6e8" fontSize="15">TRÁNSITO DE MONTACARGAS · REGLAS DE ZONA</text></>}
-            {scenario === 'quality' && <><rect x="20" y="155" width="760" height="90" rx="12" fill="#2e455c" stroke="#7891a8" strokeWidth="5" />{Array.from({ length: 15 }, (_, i) => <circle key={i} cx={42 + i * 51} cy="244" r="10" fill="#142437" stroke="#7891a8" strokeWidth="4" />)}{Array.from({ length: 5 }, (_, i) => { const x = ((i * 185 + tick * 95) % 1050) - 110; return <g key={i} transform={`translate(${x} 0)`}><rect x="0" y="158" width="110" height="75" rx="8" fill={i === 2 ? '#aa744c' : '#70a9ca'} stroke={i === 2 ? '#ffbd74' : '#bce6ff'} strokeWidth="3" /><path d="M15 175H90M15 190H76" stroke="#e3effa" opacity=".5" strokeWidth="3" />{i === 2 && <path d="M47 195l18 -17 10 18 -13 13Z" fill="#fa714f" />}</g> })}<path d="M395 65V156M350 72H440" stroke="#8bb7db" strokeWidth="10" /><rect x="365" y="93" width="60" height="42" rx="8" fill="#416b8c" stroke="#9bd8ff" strokeWidth="3" /><path d="M395 136V162" stroke="#52e0f5" strokeWidth="3" strokeDasharray="4 4" /><path d="M395 160L355 228M395 160L435 228" stroke="#48dff0" opacity=".3" strokeWidth="3" /><text x="28" y="38" fill="#a6c6e8" fontSize="15">INSPECCIÓN EN CINTA · DEFECTOS SUPERFICIALES</text><text x="545" y="95" fill="#ffcb8c" fontSize="15">RECHAZO SIMULADO</text></>}
-            {scenario === 'retail' && <><rect x="35" y="66" width="220" height="184" fill="#243a50" stroke="#688aa7" strokeWidth="5" /><rect x="545" y="66" width="220" height="184" fill="#243a50" stroke="#688aa7" strokeWidth="5" />{[0, 1, 2].map(i => <g key={i}><path d={`M45 ${118 + i * 55}H245M555 ${118 + i * 55}H755`} stroke="#6f8ca4" strokeWidth="6" />{[0, 1, 2, 3].map(j => <g key={j}><rect x={55 + j * 47} y={84 + i * 55} width="29" height="30" rx="3" fill={j % 2 ? '#7bb5d4' : '#d2a96e'} /><rect x={565 + j * 47} y={84 + i * 55} width="29" height="30" rx="3" fill={j % 2 ? '#bc92ca' : '#74c3a3'} /></g>)}</g>)}{person(290 + Math.sin(tick) * 80, 209, '#7f9fe6', 'customer1')}{person(465 + Math.sin(tick * .7 + 2) * 70, 209, '#9bc9b3', 'customer2')}{person(370 + Math.sin(tick * .9 + 4) * 38, 209, '#dc9b8a', 'customer3')}<rect x="272" y="50" width="260" height="36" rx="8" fill="#1b4964" stroke="#3c9bba" /><text x="292" y="74" fill="#a4efff" fontSize="15" fontWeight="700">OCUPACIÓN SIMULADA: 3</text><text x="30" y="38" fill="#a6c6e8" fontSize="15">FLUJO DE CLIENTES · CONTEO DE PERSONAS</text></>}
-            <path d={`M${(tick / 12) * 800} 0V350`} stroke="#50dcf6" strokeWidth="2" opacity=".45" /><rect x="20" y="306" width="760" height="26" rx="5" fill="#071424bb" /><text x="32" y="324" fill="#c3e4fb" fontSize="12">VISION AI · MOTOR DE SIMULACIÓN</text><text x="637" y="324" fill="#66e2bf" fontSize="12">DATOS SINTÉTICOS</text></svg>
-        <div className="motion-controls"><button type="button" onClick={() => setPlaying(p => !p)}>{playing ? 'Ⅱ Pausar' : '▶ Reproducir'}</button><button type="button" onClick={() => setTick(0)}>↺ Reiniciar</button><label>Velocidad <select aria-label="Velocidad de simulación" value={speed} onChange={e => setSpeed(Number(e.target.value))}><option value="0.5">0.5×</option><option value="1">1×</option><option value="2">2×</option></select></label><input aria-label="Posición de simulación" type="range" min="0" max="12" step="0.05" value={tick} onChange={e => setTick(Number(e.target.value))} /><span>{tick.toFixed(1)}s / 12s</span></div></div>
+import React, {
+    useEffect,
+    useMemo,
+    useRef,
+    useState,
+} from "react";
+import { createRoot } from "react-dom/client";
+
+import {
+    Activity,
+    AlertTriangle,
+    ArrowDownToLine,
+    ArrowRight,
+    Bell,
+    Box,
+    Check,
+    CheckCircle2,
+    Clock3,
+    Database,
+    FileText,
+    HardHat,
+    LayoutDashboard,
+    Menu,
+    PackageCheck,
+    Play,
+    ScanLine,
+    Search,
+    Settings2,
+    ShieldCheck,
+    ShoppingBag,
+    SlidersHorizontal,
+    Sparkles,
+    X,
+    Zap,
+} from "lucide-react";
+
+import {
+    Area,
+    AreaChart,
+    CartesianGrid,
+    ResponsiveContainer,
+    Tooltip,
+    XAxis,
+    YAxis,
+} from "recharts";
+
+import BackendEvents from "./BackendEvents";
+import LiveCamera from "./LiveCamera";
+import "./style.css";
+import Login, { type AuthUser } from "./Login";
+import { setAccessToken, authHeaders } from "./auth";
+
+type Scenario =
+    | "industrial"
+    | "warehouse"
+    | "quality"
+    | "retail";
+
+type Page =
+    | "dashboard"
+    | "analysis"
+    | "alerts"
+    | "history"
+    | "settings";
+
+type WorkspaceMode = "demo" | "real";
+
+type Detection = {
+    label: string;
+    confidence: number;
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+    color: string;
+};
+
+type Analysis = {
+    id: string;
+    scenario: Scenario;
+    mode: string;
+    date: string;
+    duration: number;
+    detections: Detection[];
+    alerts: string[];
+    confidence: number;
+};
+
+type DemoAlert = {
+    id: string;
+    analysisId: string;
+    scenario: Scenario;
+    message: string;
+    severity: "Alta" | "Media";
+    status: "Nueva" | "Revisada" | "Cerrada";
+    date: string;
+};
+
+const API =
+    import.meta.env.VITE_API_URL ||
+    "http://localhost:8000";
+
+const scenarios = [
+    {
+        id: "industrial" as Scenario,
+        title: "Seguridad industrial",
+        sub: "Monitoreo de personal y EPP",
+        icon: HardHat,
+        message:
+            "Posible incumplimiento de EPP en simulación",
+        severity: "Alta" as const,
+        detections: [
+            {
+                label: "Persona",
+                confidence: 0.97,
+                x: 0.28,
+                y: 0.16,
+                w: 0.29,
+                h: 0.72,
+                color: "#40c7f4",
+            },
+            {
+                label: "Casco",
+                confidence: 0.93,
+                x: 0.35,
+                y: 0.15,
+                w: 0.12,
+                h: 0.13,
+                color: "#58dfb0",
+            },
+            {
+                label: "Chaleco ausente",
+                confidence: 0.87,
+                x: 0.31,
+                y: 0.38,
+                w: 0.23,
+                h: 0.35,
+                color: "#ffb56b",
+            },
+        ],
+    },
+    {
+        id: "warehouse" as Scenario,
+        title: "Almacén inteligente",
+        sub: "Objetos y zonas restringidas",
+        icon: Box,
+        message:
+            "Objeto en zona restringida de simulación",
+        severity: "Alta" as const,
+        detections: [
+            {
+                label: "Pallet",
+                confidence: 0.96,
+                x: 0.13,
+                y: 0.48,
+                w: 0.29,
+                h: 0.33,
+                color: "#40c7f4",
+            },
+            {
+                label: "Zona restringida",
+                confidence: 0.91,
+                x: 0.53,
+                y: 0.3,
+                w: 0.36,
+                h: 0.54,
+                color: "#ffb56b",
+            },
+            {
+                label: "Caja",
+                confidence: 0.94,
+                x: 0.57,
+                y: 0.42,
+                w: 0.21,
+                h: 0.23,
+                color: "#58dfb0",
+            },
+        ],
+    },
+    {
+        id: "quality" as Scenario,
+        title: "Control de calidad",
+        sub: "Inspección de productos",
+        icon: PackageCheck,
+        message:
+            "Defecto superficial simulado",
+        severity: "Media" as const,
+        detections: [
+            {
+                label: "Producto",
+                confidence: 0.98,
+                x: 0.24,
+                y: 0.24,
+                w: 0.51,
+                h: 0.49,
+                color: "#40c7f4",
+            },
+            {
+                label: "Defecto simulado",
+                confidence: 0.89,
+                x: 0.51,
+                y: 0.4,
+                w: 0.14,
+                h: 0.16,
+                color: "#ffb56b",
+            },
+        ],
+    },
+    {
+        id: "retail" as Scenario,
+        title: "Retail analytics",
+        sub: "Conteo y actividad comercial",
+        icon: ShoppingBag,
+        message:
+            "Ocupación elevada en simulación",
+        severity: "Media" as const,
+        detections: [
+            {
+                label: "Persona",
+                confidence: 0.96,
+                x: 0.26,
+                y: 0.2,
+                w: 0.18,
+                h: 0.64,
+                color: "#40c7f4",
+            },
+            {
+                label: "Estante",
+                confidence: 0.94,
+                x: 0.56,
+                y: 0.21,
+                w: 0.32,
+                h: 0.56,
+                color: "#58dfb0",
+            },
+        ],
+    },
+];
+
+const navigation = [
+    {
+        id: "dashboard" as Page,
+        label: "Dashboard",
+        icon: LayoutDashboard,
+    },
+    {
+        id: "analysis" as Page,
+        label: "Análisis visual",
+        icon: ScanLine,
+    },
+    {
+        id: "alerts" as Page,
+        label: "Centro de alertas",
+        icon: Bell,
+    },
+    {
+        id: "history" as Page,
+        label: "Historial y reportes",
+        icon: FileText,
+    },
+    {
+        id: "settings" as Page,
+        label: "Configuración",
+        icon: Settings2,
+    },
+];
+
+const STORAGE_KEY = "vision-ai-enterprise-v2";
+
+function readStorage(): {
+    threshold?: number;
+    analyses?: Analysis[];
+    alerts?: DemoAlert[];
+} {
+    try {
+        return JSON.parse(
+            localStorage.getItem(STORAGE_KEY) || "{}"
+        );
+    } catch {
+        return {};
+    }
+}
+
+function formatDate(value: string) {
+    return new Date(value).toLocaleString("es-PE", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+    });
+}
+
+function newId() {
+    return `VA-${Date.now().toString(36).toUpperCase()}`;
+}
+
+function MotionDemo({
+    scenario,
+}: {
+    scenario: Scenario;
+}) {
+    const [playing, setPlaying] = useState(true);
+    const [tick, setTick] = useState(0);
+
+    useEffect(() => {
+        setTick(0);
+        setPlaying(true);
+    }, [scenario]);
+
+    useEffect(() => {
+        if (!playing) return;
+
+        const timer = window.setInterval(() => {
+            setTick((previous) => (previous + 0.05) % 12);
+        }, 50);
+
+        return () => window.clearInterval(timer);
+    }, [playing]);
+
+    const current = scenarios.find(
+        (item) => item.id === scenario
+    )!;
+
+    const position = Math.sin(tick) * 35;
+
+    return (
+        <div className="motion-demo">
+            <div className="motion-head">
+                <div>
+                    <strong>
+                        <span className="pulse-dot" />
+                        {" "}SIMULACIÓN ANIMADA
+                    </strong>
+                    <small>
+                        {current.title} · Datos sintéticos,
+                        no inferencia real
+                    </small>
+                </div>
+                <span className="motion-live">
+                    {playing
+                        ? "● EN REPRODUCCIÓN"
+                        : "Ⅱ PAUSADO"}
+                </span>
+            </div>
+
+            <svg
+                className="motion-stage"
+                viewBox="0 0 800 350"
+                role="img"
+                aria-label={`Simulación de ${current.title}`}
+            >
+                <defs>
+                    <linearGradient
+                        id="demoBackground"
+                        x1="0"
+                        y1="0"
+                        x2="0"
+                        y2="1"
+                    >
+                        <stop
+                            offset="0"
+                            stopColor="#142c49"
+                        />
+                        <stop
+                            offset="1"
+                            stopColor="#091525"
+                        />
+                    </linearGradient>
+                </defs>
+
+                <rect
+                    width="800"
+                    height="350"
+                    fill="url(#demoBackground)"
+                />
+
+                <path
+                    d="M0 250H800V350H0Z"
+                    fill="#152b43"
+                />
+
+                {scenario === "industrial" && (
+                    <>
+                        <path
+                            d="M60 250V80H220V250M580 250V80H740V250"
+                            stroke="#536c83"
+                            strokeWidth="12"
+                            fill="none"
+                        />
+                        {[250, 470].map((x, index) => (
+                            <g
+                                key={index}
+                                transform={`translate(${x + position * (index ? -1 : 1)
+                                    } 0)`}
+                            >
+                                <circle
+                                    cx="0"
+                                    cy="135"
+                                    r="17"
+                                    fill="#f4c99e"
+                                />
+                                <rect
+                                    x="-20"
+                                    y="155"
+                                    width="40"
+                                    height="65"
+                                    rx="6"
+                                    fill={
+                                        index === 0
+                                            ? "#ffce55"
+                                            : "#3677b7"
+                                    }
+                                />
+                                <path
+                                    d="M-10 220L-16 250M10 220L16 250"
+                                    stroke="#a8b9d1"
+                                    strokeWidth="10"
+                                />
+                                <rect
+                                    x="-30"
+                                    y="105"
+                                    width="60"
+                                    height="130"
+                                    fill="none"
+                                    stroke={
+                                        index === 0
+                                            ? "#49d6ee"
+                                            : "#ffae68"
+                                    }
+                                    strokeWidth="3"
+                                    strokeDasharray="8 5"
+                                />
+                            </g>
+                        ))}
+                        <text
+                            x="35"
+                            y="40"
+                            fill="#b5d9f1"
+                            fontSize="17"
+                        >
+                            MONITOREO DE PERSONAL · DEMO
+                        </text>
+                    </>
+                )}
+
+                {scenario === "warehouse" && (
+                    <>
+                        {[0, 1, 2].map((row) => (
+                            <g key={row}>
+                                <rect
+                                    x="60"
+                                    y={70 + row * 55}
+                                    width="270"
+                                    height="40"
+                                    fill="#56718c"
+                                />
+                                {[0, 1, 2, 3].map((column) => (
+                                    <rect
+                                        key={column}
+                                        x={75 + column * 65}
+                                        y={78 + row * 55}
+                                        width="45"
+                                        height="30"
+                                        fill="#b88957"
+                                    />
+                                ))}
+                            </g>
+                        ))}
+                        <rect
+                            x="475"
+                            y="75"
+                            width="275"
+                            height="170"
+                            fill="#f5a44416"
+                            stroke="#ffb76b"
+                            strokeWidth="3"
+                            strokeDasharray="10 7"
+                        />
+                        <rect
+                            x={355 + position * 3}
+                            y="205"
+                            width="105"
+                            height="45"
+                            rx="7"
+                            fill="#f0ae42"
+                        />
+                        <text
+                            x="495"
+                            y="110"
+                            fill="#ffcd91"
+                            fontSize="17"
+                        >
+                            ZONA RESTRINGIDA
+                        </text>
+                    </>
+                )}
+
+                {scenario === "quality" && (
+                    <>
+                        <rect
+                            x="20"
+                            y="175"
+                            width="760"
+                            height="75"
+                            rx="12"
+                            fill="#405c75"
+                        />
+                        {[0, 1, 2, 3, 4].map((index) => (
+                            <g
+                                key={index}
+                                transform={`translate(${((index * 175 + tick * 60) % 1000) -
+                                    120
+                                    } 0)`}
+                            >
+                                <rect
+                                    y="145"
+                                    width="110"
+                                    height="80"
+                                    rx="7"
+                                    fill={
+                                        index === 2
+                                            ? "#b87a4e"
+                                            : "#75aeca"
+                                    }
+                                />
+                                {index === 2 && (
+                                    <path
+                                        d="M35 175L65 160L80 190L50 205Z"
+                                        fill="#fa714f"
+                                    />
+                                )}
+                            </g>
+                        ))}
+                        <text
+                            x="30"
+                            y="40"
+                            fill="#b5d9f1"
+                            fontSize="17"
+                        >
+                            INSPECCIÓN DE PRODUCTOS · DEMO
+                        </text>
+                    </>
+                )}
+
+                {scenario === "retail" && (
+                    <>
+                        {[50, 560].map((x) => (
+                            <g key={x}>
+                                <rect
+                                    x={x}
+                                    y="65"
+                                    width="190"
+                                    height="185"
+                                    fill="#2c465e"
+                                    stroke="#7294ae"
+                                    strokeWidth="4"
+                                />
+                                {[0, 1, 2].map((row) => (
+                                    <path
+                                        key={row}
+                                        d={`M${x + 10} ${120 + row * 50
+                                            }H${x + 180}`}
+                                        stroke="#8ba7bc"
+                                        strokeWidth="7"
+                                    />
+                                ))}
+                            </g>
+                        ))}
+                        {[310, 420].map((x, index) => (
+                            <g
+                                key={index}
+                                transform={`translate(${x + position * (index ? -1 : 1)
+                                    } 0)`}
+                            >
+                                <circle
+                                    cx="0"
+                                    cy="150"
+                                    r="16"
+                                    fill="#f4c99e"
+                                />
+                                <rect
+                                    x="-19"
+                                    y="170"
+                                    width="38"
+                                    height="60"
+                                    rx="7"
+                                    fill="#7f9fe6"
+                                />
+                                <path
+                                    d="M-10 230L-15 250M10 230L15 250"
+                                    stroke="#a8b9d1"
+                                    strokeWidth="9"
+                                />
+                            </g>
+                        ))}
+                        <text
+                            x="30"
+                            y="40"
+                            fill="#b5d9f1"
+                            fontSize="17"
+                        >
+                            FLUJO DE CLIENTES · DEMO
+                        </text>
+                    </>
+                )}
+
+                <path
+                    d={`M${(tick / 12) * 800} 0V350`}
+                    stroke="#50dcf6"
+                    strokeWidth="2"
+                    opacity=".45"
+                />
+
+                <rect
+                    x="20"
+                    y="305"
+                    width="760"
+                    height="27"
+                    rx="5"
+                    fill="#071424bb"
+                />
+
+                <text
+                    x="32"
+                    y="324"
+                    fill="#c3e4fb"
+                    fontSize="12"
+                >
+                    VISION AI · MOTOR DE SIMULACIÓN
+                </text>
+            </svg>
+
+            <div className="motion-controls">
+                <button
+                    type="button"
+                    onClick={() =>
+                        setPlaying((value) => !value)
+                    }
+                >
+                    {playing ? "Ⅱ Pausar" : "▶ Reproducir"}
+                </button>
+
+                <button
+                    type="button"
+                    onClick={() => setTick(0)}
+                >
+                    ↺ Reiniciar
+                </button>
+
+                <input
+                    aria-label="Posición de simulación"
+                    type="range"
+                    min="0"
+                    max="12"
+                    step="0.05"
+                    value={tick}
+                    onChange={(event) =>
+                        setTick(Number(event.target.value))
+                    }
+                />
+
+                <span>{tick.toFixed(1)}s / 12s</span>
+            </div>
+        </div>
+    );
+}
+
+function DashboardApp({
+    user,
+    onLogout,
+}: {
+    user: AuthUser;
+    onLogout: () => void;
+}) {
+
+    const initial = useMemo(readStorage, []);
+
+    const [page, setPage] =
+        useState<Page>("dashboard");
+
+    const [scenario, setScenario] =
+        useState<Scenario>("industrial");
+
+    const [workspaceMode, setWorkspaceMode] =
+        useState<WorkspaceMode>(() =>
+            sessionStorage.getItem("vision-ai-mode") ===
+                "real"
+                ? "real"
+                : "demo"
+        );
+
+    const [threshold, setThreshold] =
+        useState(initial.threshold ?? 75);
+
+    const [analyses, setAnalyses] =
+        useState<Analysis[]>(
+            initial.analyses ?? []
+        );
+
+    const [alerts, setAlerts] =
+        useState<DemoAlert[]>(
+            initial.alerts ?? []
+        );
+
+    const [active, setActive] =
+        useState<Analysis | null>(null);
+
+    const [mobile, setMobile] =
+        useState(false);
+
+    const [busy, setBusy] =
+        useState(false);
+
+    const [progress, setProgress] =
+        useState(0);
+
+    const [filter, setFilter] =
+        useState("");
+
+    const [statusFilter, setStatusFilter] =
+        useState("Todos");
+
+    const [toast, setToast] =
+        useState("");
+
+    const [error, setError] =
+        useState("");
+
+    const [apiOnline, setApiOnline] =
+        useState(false);
+
+    const [modelLoaded, setModelLoaded] =
+        useState(false);
+
+    const sidebarRef =
+        useRef<HTMLElement>(null);
+
+    const menuButtonRef =
+        useRef<HTMLButtonElement>(null);
+
+    const isReal = workspaceMode === "real";
+
+    const current = scenarios.find(
+        (item) => item.id === scenario
+    )!;
+
+    const pageTitle = navigation.find(
+        (item) => item.id === page
+    )?.label;
+
+    const detected = analyses.reduce(
+        (total, item) =>
+            total + item.detections.length,
+        0
+    );
+
+    const openAlerts = alerts.filter(
+        (item) => item.status === "Nueva"
+    ).length;
+
+    const averageConfidence = analyses.length
+        ? Math.round(
+            (analyses.reduce(
+                (total, item) =>
+                    total + item.confidence,
+                0
+            ) /
+                analyses.length) *
+            100
+        )
+        : 0;
+
+    const chart = useMemo(() => {
+        const days = [
+            "Lun",
+            "Mar",
+            "Mié",
+            "Jue",
+            "Vie",
+            "Sáb",
+            "Dom",
+        ];
+
+        return days.map((day, index) => ({
+            day,
+            value: analyses.filter(
+                (_, position) =>
+                    position % 7 === index
+            ).length,
+        }));
+    }, [analyses]);
+
+    useEffect(() => {
+        localStorage.setItem(
+            STORAGE_KEY,
+            JSON.stringify({
+                threshold,
+                analyses,
+                alerts,
+            })
+        );
+    }, [threshold, analyses, alerts]);
+
+    useEffect(() => {
+        sessionStorage.setItem(
+            "vision-ai-mode",
+            workspaceMode
+        );
+    }, [workspaceMode]);
+
+    useEffect(() => {
+        if (!toast) return;
+
+        const timer = window.setTimeout(
+            () => setToast(""),
+            3500
+        );
+
+        return () => window.clearTimeout(timer);
+    }, [toast]);
+
+    // Cierra el menú al pulsar fuera o presionar Esc.
+    useEffect(() => {
+        if (!mobile) return;
+
+        function handleOutsideClick(
+            event: PointerEvent
+        ) {
+            const target = event.target as Node;
+
+            if (
+                !sidebarRef.current?.contains(target) &&
+                !menuButtonRef.current?.contains(target)
+            ) {
+                setMobile(false);
+            }
+        }
+
+        function handleEscape(
+            event: KeyboardEvent
+        ) {
+            if (event.key === "Escape") {
+                setMobile(false);
+            }
+        }
+
+        document.addEventListener(
+            "pointerdown",
+            handleOutsideClick
+        );
+
+        document.addEventListener(
+            "keydown",
+            handleEscape
+        );
+
+        return () => {
+            document.removeEventListener(
+                "pointerdown",
+                handleOutsideClick
+            );
+
+            document.removeEventListener(
+                "keydown",
+                handleEscape
+            );
+        };
+    }, [mobile]);
+
+    // Comprueba que el backend y YOLO estén disponibles.
+    useEffect(() => {
+        let cancelled = false;
+
+        async function checkBackend() {
+            try {
+                const response = await fetch(
+                    `${API}/api/v1/health`
+                );
+
+                if (!response.ok) {
+                    throw new Error("Backend no disponible");
+                }
+
+                const data = await response.json();
+
+                if (!cancelled) {
+                    setApiOnline(true);
+                    setModelLoaded(
+                        data.model_loaded === true
+                    );
+                }
+            } catch {
+                if (!cancelled) {
+                    setApiOnline(false);
+                    setModelLoaded(false);
+                }
+            }
+        }
+
+        void checkBackend();
+
+        const timer = window.setInterval(
+            checkBackend,
+            10000
+        );
+
+        return () => {
+            cancelled = true;
+            window.clearInterval(timer);
+        };
+    }, []);
+
+    function navigate(selected: Page) {
+        setPage(selected);
+        setMobile(false);
+        setError("");
+    }
+
+
+    function openScenario(selected: Scenario) {
+        setScenario(selected);
+        setActive(null);
+        setError("");
+        setProgress(0);
+        setPage("analysis");
+        setMobile(false);
+
+        // Desplaza el contenido principal al inicio.
+        const mainContent = document.querySelector(".main");
+
+        if (mainContent instanceof HTMLElement) {
+            mainContent.scrollTo({
+                top: 0,
+                behavior: "smooth",
+            });
+        }
+
+        window.scrollTo({
+            top: 0,
+            behavior: "smooth",
+        });
+    }
+
+
+    function changeWorkspace(
+        selected: WorkspaceMode
+    ) {
+        setWorkspaceMode(selected);
+        setActive(null);
+        setError("");
+        setMobile(false);
+    }
+
+    function runDemo() {
+        if (busy || isReal) return;
+
+        setBusy(true);
+        setProgress(0);
+        setError("");
+
+        const started = performance.now();
+        let progressValue = 0;
+
+        const timer = window.setInterval(() => {
+            progressValue = Math.min(
+                100,
+                progressValue + 20
+            );
+
+            setProgress(progressValue);
+
+            if (progressValue < 100) return;
+
+            window.clearInterval(timer);
+
+            const detections =
+                current.detections.filter(
+                    (item) =>
+                        item.confidence * 100 >=
+                        threshold
+                );
+
+            const average = detections.length
+                ? detections.reduce(
+                    (total, item) =>
+                        total + item.confidence,
+                    0
+                ) / detections.length
+                : 0;
+
+            const alertLabels = [
+                "Chaleco ausente",
+                "Zona restringida",
+                "Defecto simulado",
+            ];
+
+            const hasAlert = detections.some(
+                (item) =>
+                    alertLabels.includes(item.label)
+            );
+
+            const analysis: Analysis = {
+                id: newId(),
+                scenario,
+                mode: "DEMO",
+                date: new Date().toISOString(),
+                duration: Number(
+                    (
+                        (performance.now() - started) /
+                        1000
+                    ).toFixed(1)
+                ),
+                detections,
+                alerts: hasAlert
+                    ? [current.message]
+                    : [],
+                confidence: average,
+            };
+
+            setAnalyses((previous) => [
+                analysis,
+                ...previous,
+            ]);
+
+            setActive(analysis);
+
+            if (hasAlert) {
+                const alert: DemoAlert = {
+                    id: newId(),
+                    analysisId: analysis.id,
+                    scenario,
+                    message: current.message,
+                    severity: current.severity,
+                    status: "Nueva",
+                    date: analysis.date,
+                };
+
+                setAlerts((previous) => [
+                    alert,
+                    ...previous,
+                ]);
+            }
+
+            setBusy(false);
+            setToast(
+                "Análisis DEMO registrado correctamente"
+            );
+        }, 100);
+    }
+
+    async function saveRealEvent(
+        count: number
+    ) {
+        if (!isReal || count <= 0) return;
+
+        try {
+            const response = await fetch(
+                `${API}/api/v1/events`,
+                {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                        scenario,
+                        source: "CAMARA_REAL",
+                        severity: "Media",
+                        message:
+                            `${count} detección(es) generales ` +
+                            "observadas mediante YOLO. " +
+                            "Pendiente de revisión humana.",
+                        detections: count,
+                    }),
+                }
+            );
+
+            if (!response.ok) {
+                throw new Error(
+                    "No se pudo guardar el evento"
+                );
+            }
+
+            setToast(
+                "Observación real guardada en SQLite"
+            );
+        } catch {
+            setError(
+                "No se pudo registrar la observación en el backend."
+            );
+        }
+    }
+
+    function updateAlert(
+        alert: DemoAlert,
+        status: DemoAlert["status"]
+    ) {
+        setAlerts((previous) =>
+            previous.map((item) =>
+                item.id === alert.id
+                    ? { ...item, status }
+                    : item
+            )
+        );
+    }
+
+    function exportCsv() {
+        const header = [
+            "ID",
+            "Escenario",
+            "Fecha",
+            "Detecciones",
+            "Confianza",
+            "Modo",
+        ];
+
+        const rows = analyses.map((item) => [
+            item.id,
+            item.scenario,
+            item.date,
+            String(item.detections.length),
+            String(
+                Math.round(item.confidence * 100)
+            ),
+            item.mode,
+        ]);
+
+        const csv = [header, ...rows]
+            .map((row) =>
+                row
+                    .map((value) =>
+                        `"${value.replace(/"/g, '""')}"`
+                    )
+                    .join(",")
+            )
+            .join("\r\n");
+
+        const blob = new Blob(
+            ["\uFEFF", csv],
+            {
+                type: "text/csv;charset=utf-8",
+            }
+        );
+
+        const url = URL.createObjectURL(blob);
+        const link =
+            document.createElement("a");
+
+        link.href = url;
+        link.download =
+            "vision-ai-historial-demo.csv";
+        link.click();
+
+        URL.revokeObjectURL(url);
+    }
+
+    return (
+        <div className="app">
+            {mobile && (
+                <div
+                    className="mobile-overlay"
+                    onClick={() => setMobile(false)}
+                    aria-hidden="true"
+                />
+            )}
+
+            <aside
+                ref={sidebarRef}
+                className={
+                    "sidebar " +
+                    (mobile ? "mobile-open" : "")
+                }
+            >
+                <div className="brand">
+                    <div className="brand-icon">
+                        <ScanLine size={24} />
+                    </div>
+                    <div>
+                        <strong>VISION AI</strong>
+                        <small>ENTERPRISE 2.0</small>
+                    </div>
+                </div>
+
+                <div
+                    className="environment-switch"
+                    role="group"
+                    aria-label="Seleccionar entorno"
+                >
+                    <button
+                        type="button"
+                        className={
+                            !isReal ? "chosen" : ""
+                        }
+                        onClick={() =>
+                            changeWorkspace("demo")
+                        }
+                    >
+                        ◈ MODO DEMO
+                    </button>
+
+                    <button
+                        type="button"
+                        className={
+                            isReal ? "chosen" : ""
+                        }
+                        onClick={() =>
+                            changeWorkspace("real")
+                        }
+                    >
+                        ◉ MODO REAL
+                    </button>
+                </div>
+
+                <p className="environment-caption">
+                    {isReal
+                        ? "Cámara real · FastAPI + YOLO"
+                        : "Simulación · Datos sintéticos"}
+                </p>
+
+                <div className="nav-label">
+                    PLATAFORMA
+                </div>
+
+                <nav>
+                    {navigation.map((item) => (
+                        <button
+                            key={item.id}
+                            type="button"
+                            className={
+                                "nav-item " +
+                                (page === item.id
+                                    ? "selected"
+                                    : "")
+                            }
+                            onClick={() =>
+                                navigate(item.id)
+                            }
+                        >
+                            <item.icon size={18} />
+                            {item.label}
+
+                            {!isReal &&
+                                item.id === "alerts" &&
+                                openAlerts > 0 && (
+                                    <span className="nav-count">
+                                        {openAlerts}
+                                    </span>
+                                )}
+                        </button>
+                    ))}
+                </nav>
+
+                <div className="sidebar-bottom">
+                    <div className="engine-card">
+                        <div className="engine-top">
+                            <span className="pulse-dot" />
+                            MOTOR DE ANÁLISIS
+                        </div>
+
+                        <strong>
+                            {isReal
+                                ? "FastAPI + YOLO"
+                                : "DemoVisionAdapter"}
+                        </strong>
+
+                        <small>
+                            {isReal
+                                ? modelLoaded
+                                    ? "Modelo general cargado"
+                                    : "Modelo no disponible"
+                                : "Simulación sin inferencia"}
+                        </small>
+
+                        <div className="engine-bar">
+                            <span />
+                        </div>
+                    </div>
+
+                    <div className="user">
+                        <div>
+                            <b>{user.username}</b>
+                            <small>Administrador</small>
+
+                            <button
+                                type="button"
+                                onClick={onLogout}
+                                style={{
+                                    marginTop: 8,
+                                    padding: "7px 12px",
+                                    cursor: "pointer",
+                                    borderRadius: 8,
+                                }}
+                            >
+                                Cerrar sesión
+                            </button>
+                        </div>
+                        <div className="avatar">
+                            VA
+                        </div>
+                        <div>
+                            <b>Operador VISION AI</b>
+                            <small>
+                                {isReal
+                                    ? "Entorno real"
+                                    : "Entorno demostrativo"}
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+
+            <div className="main">
+                <header className="topbar">
+                    <div className="breadcrumb">
+                        <button
+                            ref={menuButtonRef}
+                            type="button"
+                            className="mobile-menu"
+                            aria-label={
+                                mobile
+                                    ? "Cerrar menú"
+                                    : "Abrir menú"
+                            }
+                            aria-expanded={mobile}
+                            onClick={() =>
+                                setMobile((value) => !value)
+                            }
+                        >
+                            <Menu size={20} />
+                        </button>
+
+                        <span>Plataforma</span>
+                        <span className="slash">
+                            /
+                        </span>
+                        <b>{pageTitle}</b>
+                    </div>
+
+                    <div className="top-actions">
+                        <div className="top-mode-actions">
+                            <button
+                                type="button"
+                                className={
+                                    !isReal
+                                        ? "top-mode-btn selected demo"
+                                        : "top-mode-btn"
+                                }
+                                onClick={() =>
+                                    changeWorkspace("demo")
+                                }
+                            >
+                                ◈ MODO DEMO
+                            </button>
+
+                            <button
+                                type="button"
+                                className={
+                                    isReal
+                                        ? "top-mode-btn selected real"
+                                        : "top-mode-btn"
+                                }
+                                onClick={() =>
+                                    changeWorkspace("real")
+                                }
+                            >
+                                ◉ MODO REAL
+                            </button>
+                        </div>
+
+                        <span className="top-date">
+                            {new Date()
+                                .toLocaleDateString("es-PE")}
+                        </span>
+
+                        <button
+                            type="button"
+                            className="icon-btn"
+                            aria-label="Ver alertas"
+                            onClick={() =>
+                                navigate("alerts")
+                            }
+                        >
+                            <Bell size={19} />
+                        </button>
+                    </div>
+                </header>
+
+                <main className="content">
+                    {page === "dashboard" && (
+                        <>
+                            <div className="heading">
+                                <div>
+                                    <div className="eyebrow">
+                                        <Sparkles size={14} />
+                                        INTELLIGENCE OVERVIEW
+                                    </div>
+
+                                    <h1>
+                                        Centro de inteligencia visual
+                                    </h1>
+
+                                    <p>
+                                        {isReal
+                                            ? "Operación con inferencia real mediante YOLO."
+                                            : "Panel de demostración con datos sintéticos."}
+                                    </p>
+                                </div>
+
+                                <button
+                                    className="primary"
+                                    onClick={() =>
+                                        navigate("analysis")
+                                    }
+                                >
+                                    <ScanLine size={17} />
+                                    {isReal
+                                        ? "Abrir cámara"
+                                        : "Nuevo análisis"}
+                                    <ArrowRight size={17} />
+                                </button>
+                            </div>
+
+                            <div className="hero">
+                                <div className="hero-copy">
+                                    <span className="hero-pill">
+                                        <span className="pulse-dot" />
+                                        PLATAFORMA OPERATIVA ·
+                                        {isReal ? " REAL" : " DEMO"}
+                                    </span>
+
+                                    <h2>
+                                        Inteligencia visual
+                                        <em> en tiempo real.</em>
+                                    </h2>
+
+                                    <p>
+                                        Cuatro escenarios empresariales
+                                        con supervisión humana.
+                                    </p>
+
+                                    <button
+                                        onClick={() =>
+                                            navigate("analysis")
+                                        }
+                                    >
+                                        Explorar análisis
+                                        <ArrowRight size={16} />
+                                    </button>
+                                </div>
+
+                                <div className="hero-art">
+                                    <div className="orb orb-one" />
+                                    <div className="orb orb-two" />
+                                    <div className="hero-reticle">
+                                        <ScanLine
+                                            size={90}
+                                            strokeWidth={0.75}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+
+                            {isReal ? (
+                                <>
+                                    <div className="section-header">
+                                        <h3>
+                                            Actividad del backend
+                                        </h3>
+                                        <span>
+                                            Datos reales de SQLite
+                                        </span>
+                                    </div>
+
+                                    <BackendEvents
+                                        view="dashboard"
+                                    />
+                                </>
+                            ) : (
+                                <>
+                                    <div className="section-header">
+                                        <h3>
+                                            Indicadores generales
+                                        </h3>
+                                        <span>
+                                            Datos de demostración
+                                        </span>
+                                    </div>
+
+                                    <div className="metrics">
+                                        {[
+                                            {
+                                                label:
+                                                    "Análisis realizados",
+                                                value: analyses.length,
+                                                icon: ScanLine,
+                                                color: "blue",
+                                            },
+                                            {
+                                                label:
+                                                    "Objetos detectados",
+                                                value: detected,
+                                                icon: Box,
+                                                color: "purple",
+                                            },
+                                            {
+                                                label:
+                                                    "Alertas pendientes",
+                                                value: openAlerts,
+                                                icon: AlertTriangle,
+                                                color: "orange",
+                                            },
+                                            {
+                                                label:
+                                                    "Confianza promedio",
+                                                value:
+                                                    `${averageConfidence}%`,
+                                                icon: Activity,
+                                                color: "green",
+                                            },
+                                        ].map((metric) => (
+                                            <div
+                                                className="metric"
+                                                key={metric.label}
+                                            >
+                                                <div className="metric-top">
+                                                    <span>
+                                                        {metric.label}
+                                                    </span>
+                                                    <div
+                                                        className={
+                                                            "metric-icon " +
+                                                            metric.color
+                                                        }
+                                                    >
+                                                        <metric.icon
+                                                            size={19}
+                                                        />
+                                                    </div>
+                                                </div>
+
+                                                <div className="metric-value">
+                                                    {metric.value}
+                                                </div>
+
+                                                <div className="metric-foot">
+                                                    Datos sintéticos
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </>
+                            )}
+
+                            <div className="dashboard-grid">
+                                {!isReal && (
+                                    <div className="panel chart-panel">
+                                        <div className="panel-title">
+                                            <div>
+                                                <h3>
+                                                    Actividad de análisis
+                                                </h3>
+                                                <p>
+                                                    Registros DEMO
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        <div className="chart">
+                                            <ResponsiveContainer
+                                                width="100%"
+                                                height="100%"
+                                            >
+                                                <AreaChart data={chart}>
+                                                    <CartesianGrid
+                                                        stroke="#243047"
+                                                        strokeDasharray="3 5"
+                                                        vertical={false}
+                                                    />
+                                                    <XAxis
+                                                        dataKey="day"
+                                                        stroke="#8290aa"
+                                                    />
+                                                    <YAxis
+                                                        allowDecimals={false}
+                                                        stroke="#8290aa"
+                                                    />
+                                                    <Tooltip />
+                                                    <Area
+                                                        type="monotone"
+                                                        dataKey="value"
+                                                        stroke="#719cff"
+                                                        fill="#719cff33"
+                                                        strokeWidth={3}
+                                                    />
+                                                </AreaChart>
+                                            </ResponsiveContainer>
+                                        </div>
+                                    </div>
+                                )}
+
+                                <div className="panel quick-panel">
+                                    <div className="panel-title">
+                                        <div>
+                                            <h3>
+                                                Escenarios disponibles
+                                            </h3>
+                                            <p>
+                                                Casos de uso empresariales
+                                            </p>
+                                        </div>
+                                        <span className="small-tag">
+                                            04 módulos
+                                        </span>
+                                    </div>
+                                    <div className="quick-list">
+                                        {scenarios.map((item) => {
+                                            const Icon = item.icon;
+
+                                            return (
+                                                <button
+                                                    key={item.id}
+                                                    type="button"
+                                                    onClick={() => openScenario(item.id)}
+                                                    aria-label={`Abrir ${item.title}`}
+                                                >
+                                                    <span className="quick-icon">
+                                                        <Icon size={19} />
+                                                    </span>
+
+                                                    <span>
+                                                        <b>{item.title}</b>
+                                                        <small>{item.sub}</small>
+                                                    </span>
+
+                                                    <ArrowRight size={17} />
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+
+                                </div>
+                            </div>
+
+                            {!isReal && (
+                                <div className="panel recent">
+                                    <div className="panel-title">
+                                        <div>
+                                            <h3>
+                                                Actividad reciente
+                                            </h3>
+                                            <p>
+                                                Últimos análisis DEMO
+                                            </p>
+                                        </div>
+
+                                        <button
+                                            className="text-button"
+                                            onClick={() =>
+                                                navigate("history")
+                                            }
+                                        >
+                                            Ver historial
+                                            <ArrowRight size={15} />
+                                        </button>
+                                    </div>
+
+                                    {analyses.length === 0 ? (
+                                        <div className="empty">
+                                            <Clock3 size={26} />
+                                            <b>
+                                                Sin actividad reciente
+                                            </b>
+                                            <p>
+                                                Ejecuta una demostración
+                                                para generar registros.
+                                            </p>
+                                        </div>
+                                    ) : (
+                                        <div className="rows">
+                                            {analyses
+                                                .slice(0, 4)
+                                                .map((item) => (
+                                                    <div
+                                                        className="data-row"
+                                                        key={item.id}
+                                                    >
+                                                        <ScanLine size={18} />
+                                                        <div>
+                                                            <b>
+                                                                {
+                                                                    scenarios.find(
+                                                                        (s) =>
+                                                                            s.id ===
+                                                                            item.scenario
+                                                                    )?.title
+                                                                }
+                                                            </b>
+                                                            <small>
+                                                                {formatDate(
+                                                                    item.date
+                                                                )}
+                                                            </small>
+                                                        </div>
+                                                        <span className="success-tag">
+                                                            <Check size={13} />
+                                                            Completado
+                                                        </span>
+                                                    </div>
+                                                ))}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </>
+                    )}
+
+                    {page === "analysis" && (
+                        <>
+                            <div className="heading">
+                                <div>
+                                    <div className="eyebrow">
+                                        <ScanLine size={14} />
+                                        ANALYSIS WORKSPACE
+                                    </div>
+                                    <h1>
+                                        Centro de análisis visual
+                                    </h1>
+                                    <p>
+                                        {isReal
+                                            ? "Inferencia mediante cámara y YOLO."
+                                            : "Escenarios sintéticos para demostración."}
+                                    </p>
+                                </div>
+
+                                <span className="info-tag">
+                                    <ShieldCheck size={16} />
+                                    {isReal
+                                        ? "MODO REAL"
+                                        : "MODO DEMO"}
+                                </span>
+                            </div>
+
+                            <div className="analysis-layout">
+                                <div className="analysis-main">
+                                    <div className="panel analysis-panel">
+                                        <div className="panel-title">
+                                            <div>
+                                                <h3>
+                                                    Escenario de análisis
+                                                </h3>
+                                                <p>
+                                                    Selecciona un escenario
+                                                </p>
+                                            </div>
+                                            <span className="small-tag">
+                                                04 disponibles
+                                            </span>
+                                        </div>
+
+                                        <div className="scenario-grid">
+                                            {scenarios.map((item) => (
+                                                <button
+                                                    key={item.id}
+                                                    type="button"
+                                                    className={
+                                                        "scenario-card " +
+                                                        (scenario === item.id
+                                                            ? "active"
+                                                            : "")
+                                                    }
+                                                    onClick={() =>
+                                                        openScenario(item.id)
+                                                    }
+                                                >
+                                                    <item.icon
+                                                        size={21}
+                                                    />
+                                                    <b>
+                                                        {item.title}
+                                                    </b>
+                                                    <small>
+                                                        {item.sub}
+                                                    </small>
+
+                                                    {scenario === item.id && (
+                                                        <span className="scenario-check">
+                                                            <Check size={12} />
+                                                        </span>
+                                                    )}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    <div className="panel viewer-panel">
+                                        <div className="panel-title">
+                                            <div>
+                                                <h3>
+                                                    Visor inteligente
+                                                </h3>
+                                                <p>
+                                                    {current.title}
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        <div className="environment-banner">
+                                            {isReal
+                                                ? "Inferencia real con YOLO. Las clases especializadas requieren modelos entrenados."
+                                                : "Simulación animada: resultados sintéticos."}
+                                        </div>
+
+                                        {isReal ? (
+                                            <LiveCamera
+                                                key={scenario}
+                                                scenario={scenario}
+                                                threshold={threshold}
+                                                onEvent={(count) => {
+                                                    void saveRealEvent(
+                                                        count
+                                                    );
+                                                }}
+                                            />
+                                        ) : (
+                                            <MotionDemo
+                                                scenario={scenario}
+                                            />
+                                        )}
+
+                                        <div className="viewer-footer">
+                                            <span>
+                                                {isReal
+                                                    ? "Origen: cámara real"
+                                                    : "Origen: simulación"}
+                                            </span>
+                                            <span>
+                                                {isReal
+                                                    ? "YOLO · observaciones generales"
+                                                    : "Datos ilustrativos"}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="analysis-side">
+                                    <div className="panel controls">
+                                        <div className="panel-title">
+                                            <div>
+                                                <h3>
+                                                    Configuración
+                                                </h3>
+                                                <p>
+                                                    Parámetros de ejecución
+                                                </p>
+                                            </div>
+                                            <SlidersHorizontal
+                                                size={18}
+                                            />
+                                        </div>
+
+                                        <div className="range-title">
+                                            <label className="field-label">
+                                                Umbral de confianza
+                                            </label>
+                                            <b>{threshold}%</b>
+                                        </div>
+
+                                        <input
+                                            className="range"
+                                            type="range"
+                                            min="20"
+                                            max="99"
+                                            value={threshold}
+                                            onChange={(event) =>
+                                                setThreshold(
+                                                    Number(
+                                                        event.target.value
+                                                    )
+                                                )
+                                            }
+                                        />
+
+                                        <div className="range-label">
+                                            <span>20%</span>
+                                            <span>99%</span>
+                                        </div>
+
+                                        {error && (
+                                            <div className="error">
+                                                {error}
+                                            </div>
+                                        )}
+
+                                        {!isReal && (
+                                            <button
+                                                type="button"
+                                                className="primary run"
+                                                disabled={busy}
+                                                onClick={runDemo}
+                                            >
+                                                <Play size={17} />
+                                                {busy
+                                                    ? `Procesando ${progress}%`
+                                                    : "Ejecutar análisis DEMO"}
+                                                <ArrowRight size={16} />
+                                            </button>
+                                        )}
+
+                                        {isReal && (
+                                            <div className="notice">
+                                                <ShieldCheck size={18} />
+                                                {apiOnline &&
+                                                    modelLoaded
+                                                    ? "Backend conectado y modelo YOLO cargado."
+                                                    : "Revisa la conexión con FastAPI y el modelo."}
+                                            </div>
+                                        )}
+
+                                        <p className="disclaimer">
+                                            {isReal
+                                                ? "Las detecciones reales no equivalen a certificación de seguridad industrial."
+                                                : "Los resultados DEMO son sintéticos."}
+                                        </p>
+                                    </div>
+
+                                    <div className="panel results">
+                                        <div className="panel-title">
+                                            <div>
+                                                <h3>
+                                                    Resultados
+                                                </h3>
+                                                <p>
+                                                    {isReal
+                                                        ? "Ver detecciones sobre la cámara"
+                                                        : active
+                                                            ? active.id
+                                                            : "Esperando ejecución"}
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        {isReal ? (
+                                            <div className="result-empty">
+                                                <ScanLine size={29} />
+                                                <b>
+                                                    Inferencia en vivo
+                                                </b>
+                                                <span>
+                                                    Las cajas y etiquetas
+                                                    aparecen directamente
+                                                    sobre el video.
+                                                </span>
+                                            </div>
+                                        ) : !active ? (
+                                            <div className="result-empty">
+                                                <ScanLine size={29} />
+                                                <b>
+                                                    Sin resultados
+                                                </b>
+                                                <span>
+                                                    Ejecuta el análisis
+                                                    DEMO.
+                                                </span>
+                                            </div>
+                                        ) : (
+                                            <>
+                                                <div className="result-stats">
+                                                    <div>
+                                                        <small>
+                                                            Detecciones
+                                                        </small>
+                                                        <b>
+                                                            {
+                                                                active.detections
+                                                                    .length
+                                                            }
+                                                        </b>
+                                                    </div>
+                                                    <div>
+                                                        <small>
+                                                            Confianza media
+                                                        </small>
+                                                        <b>
+                                                            {Math.round(
+                                                                active.confidence *
+                                                                100
+                                                            )}
+                                                            %
+                                                        </b>
+                                                    </div>
+                                                </div>
+
+                                                <div className="result-list">
+                                                    {active.detections.map(
+                                                        (item, index) => (
+                                                            <div key={index}>
+                                                                <span
+                                                                    className="legend"
+                                                                    style={{
+                                                                        background:
+                                                                            item.color,
+                                                                    }}
+                                                                />
+                                                                <b>
+                                                                    {item.label}
+                                                                </b>
+                                                                <span>
+                                                                    {Math.round(
+                                                                        item.confidence *
+                                                                        100
+                                                                    )}
+                                                                    %
+                                                                </span>
+                                                            </div>
+                                                        )
+                                                    )}
+                                                </div>
+
+                                                {active.alerts.length >
+                                                    0 && (
+                                                        <div className="inline-alert">
+                                                            <AlertTriangle
+                                                                size={17}
+                                                            />
+                                                            {
+                                                                active.alerts[0]
+                                                            }
+                                                        </div>
+                                                    )}
+                                            </>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        </>
+                    )}
+
+                    {page === "alerts" &&
+                        (isReal ? (
+                            <BackendEvents
+                                view="alerts"
+                            />
+                        ) : (
+                            <>
+                                <div className="heading">
+                                    <div>
+                                        <div className="eyebrow">
+                                            <Bell size={14} />
+                                            INCIDENT MANAGEMENT
+                                        </div>
+                                        <h1>
+                                            Centro de alertas
+                                        </h1>
+                                        <p>
+                                            Alertas sintéticas
+                                            sujetas a revisión.
+                                        </p>
+                                    </div>
+                                    <span className="info-tag">
+                                        {openAlerts} pendientes
+                                    </span>
+                                </div>
+
+                                <div className="panel table-panel">
+                                    <div className="panel-title">
+                                        <h3>
+                                            Alertas registradas
+                                        </h3>
+
+                                        <select
+                                            className="filter-select"
+                                            value={statusFilter}
+                                            onChange={(event) =>
+                                                setStatusFilter(
+                                                    event.target.value
+                                                )
+                                            }
+                                        >
+                                            <option>Todos</option>
+                                            <option>Nueva</option>
+                                            <option>
+                                                Revisada
+                                            </option>
+                                            <option>
+                                                Cerrada
+                                            </option>
+                                        </select>
+                                    </div>
+
+                                    <div className="alert-list">
+                                        {alerts
+                                            .filter(
+                                                (item) =>
+                                                    statusFilter ===
+                                                    "Todos" ||
+                                                    item.status ===
+                                                    statusFilter
+                                            )
+                                            .map((item) => (
+                                                <div
+                                                    className="alert-item"
+                                                    key={item.id}
+                                                >
+                                                    <span
+                                                        className={
+                                                            "severity-icon " +
+                                                            (item.severity ===
+                                                                "Alta"
+                                                                ? "high"
+                                                                : "medium")
+                                                        }
+                                                    >
+                                                        <AlertTriangle
+                                                            size={20}
+                                                        />
+                                                    </span>
+
+                                                    <div className="alert-description">
+                                                        <b>
+                                                            {item.message}
+                                                        </b>
+                                                        <small>
+                                                            {formatDate(
+                                                                item.date
+                                                            )}
+                                                        </small>
+                                                    </div>
+
+                                                    <span
+                                                        className={
+                                                            "status " +
+                                                            item.status.toLowerCase()
+                                                        }
+                                                    >
+                                                        {item.status}
+                                                    </span>
+
+                                                    <div className="alert-actions">
+                                                        {item.status ===
+                                                            "Nueva" && (
+                                                                <button
+                                                                    onClick={() =>
+                                                                        updateAlert(
+                                                                            item,
+                                                                            "Revisada"
+                                                                        )
+                                                                    }
+                                                                >
+                                                                    Revisar
+                                                                </button>
+                                                            )}
+
+                                                        {item.status !==
+                                                            "Cerrada" && (
+                                                                <button
+                                                                    onClick={() =>
+                                                                        updateAlert(
+                                                                            item,
+                                                                            "Cerrada"
+                                                                        )
+                                                                    }
+                                                                >
+                                                                    Cerrar
+                                                                </button>
+                                                            )}
+                                                    </div>
+                                                </div>
+                                            ))}
+
+                                        {alerts.length === 0 && (
+                                            <div className="empty">
+                                                <ShieldCheck
+                                                    size={25}
+                                                />
+                                                <b>
+                                                    Sin alertas
+                                                </b>
+                                                <p>
+                                                    Ejecuta una
+                                                    demostración.
+                                                </p>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </>
+                        ))}
+
+                    {page === "history" &&
+                        (isReal ? (
+                            <BackendEvents
+                                view="history"
+                            />
+                        ) : (
+                            <>
+                                <div className="heading">
+                                    <div>
+                                        <div className="eyebrow">
+                                            <Database size={14} />
+                                            AUDIT & REPORTING
+                                        </div>
+                                        <h1>
+                                            Historial y reportes
+                                        </h1>
+                                        <p>
+                                            Registro de análisis
+                                            sintéticos.
+                                        </p>
+                                    </div>
+
+                                    <button
+                                        className="primary"
+                                        onClick={exportCsv}
+                                    >
+                                        <ArrowDownToLine
+                                            size={17}
+                                        />
+                                        Exportar CSV
+                                    </button>
+                                </div>
+
+                                <div className="panel table-panel">
+                                    <div className="panel-title">
+                                        <h3>
+                                            Registro de análisis
+                                        </h3>
+
+                                        <div className="searchbox">
+                                            <Search size={16} />
+                                            <input
+                                                placeholder="Buscar..."
+                                                value={filter}
+                                                onChange={(event) =>
+                                                    setFilter(
+                                                        event.target.value
+                                                    )
+                                                }
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="table-scroll">
+                                        <table>
+                                            <thead>
+                                                <tr>
+                                                    <th>ID</th>
+                                                    <th>ESCENARIO</th>
+                                                    <th>FECHA</th>
+                                                    <th>
+                                                        DETECCIONES
+                                                    </th>
+                                                    <th>
+                                                        CONFIANZA
+                                                    </th>
+                                                    <th>ACCIÓN</th>
+                                                </tr>
+                                            </thead>
+
+                                            <tbody>
+                                                {analyses
+                                                    .filter((item) =>
+                                                        (
+                                                            item.id +
+                                                            " " +
+                                                            item.scenario
+                                                        )
+                                                            .toLowerCase()
+                                                            .includes(
+                                                                filter.toLowerCase()
+                                                            )
+                                                    )
+                                                    .map((item) => (
+                                                        <tr key={item.id}>
+                                                            <td>
+                                                                {item.id}
+                                                            </td>
+                                                            <td>
+                                                                {
+                                                                    scenarios.find(
+                                                                        (s) =>
+                                                                            s.id ===
+                                                                            item.scenario
+                                                                    )?.title
+                                                                }
+                                                            </td>
+                                                            <td>
+                                                                {formatDate(
+                                                                    item.date
+                                                                )}
+                                                            </td>
+                                                            <td>
+                                                                {
+                                                                    item.detections
+                                                                        .length
+                                                                }
+                                                            </td>
+                                                            <td>
+                                                                {Math.round(
+                                                                    item.confidence *
+                                                                    100
+                                                                )}
+                                                                %
+                                                            </td>
+                                                            <td>
+                                                                <button
+                                                                    className="text-button"
+                                                                    onClick={() => {
+                                                                        openScenario(
+                                                                            item.scenario
+                                                                        );
+                                                                        setActive(
+                                                                            item
+                                                                        );
+                                                                    }}
+                                                                >
+                                                                    Ver
+                                                                    <ArrowRight
+                                                                        size={14}
+                                                                    />
+                                                                </button>
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </>
+                        ))}
+
+                    {page === "settings" && (
+                        <>
+                            <div className="heading">
+                                <div>
+                                    <div className="eyebrow">
+                                        <Settings2 size={14} />
+                                        CONFIGURATION
+                                    </div>
+                                    <h1>
+                                        Configuración
+                                    </h1>
+                                    <p>
+                                        Parámetros de VISION AI.
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div className="settings-grid">
+                                <div className="panel controls">
+                                    <div className="panel-title">
+                                        <h3>
+                                            Motor de visión
+                                        </h3>
+                                        <Zap size={20} />
+                                    </div>
+
+                                    <div className="setting-row">
+                                        <span>
+                                            Entorno activo
+                                        </span>
+                                        <b>
+                                            {isReal
+                                                ? "REAL"
+                                                : "DEMO"}
+                                        </b>
+                                    </div>
+
+                                    <div className="setting-row">
+                                        <span>
+                                            Backend
+                                        </span>
+                                        <b>
+                                            {apiOnline
+                                                ? "Conectado"
+                                                : "Desconectado"}
+                                        </b>
+                                    </div>
+
+                                    <div className="setting-row">
+                                        <span>
+                                            Modelo general
+                                        </span>
+                                        <b>
+                                            {modelLoaded
+                                                ? "Cargado"
+                                                : "No disponible"}
+                                        </b>
+                                    </div>
+
+                                    <div className="range-title">
+                                        <label className="field-label">
+                                            Confianza mínima
+                                        </label>
+                                        <b>
+                                            {threshold}%
+                                        </b>
+                                    </div>
+
+                                    <input
+                                        className="range"
+                                        type="range"
+                                        min="20"
+                                        max="99"
+                                        value={threshold}
+                                        onChange={(event) =>
+                                            setThreshold(
+                                                Number(
+                                                    event.target.value
+                                                )
+                                            )
+                                        }
+                                    />
+                                </div>
+
+                                <div className="panel controls">
+                                    <div className="panel-title">
+                                        <h3>
+                                            Acerca de VISION AI
+                                        </h3>
+                                        <ShieldCheck
+                                            size={20}
+                                        />
+                                    </div>
+
+                                    <div className="setting-row">
+                                        <span>
+                                            Versión
+                                        </span>
+                                        <b>2.0</b>
+                                    </div>
+
+                                    <div className="setting-row">
+                                        <span>
+                                            Frontend
+                                        </span>
+                                        <b>
+                                            React + TypeScript
+                                        </b>
+                                    </div>
+
+                                    <div className="setting-row">
+                                        <span>
+                                            Backend
+                                        </span>
+                                        <b>
+                                            FastAPI + YOLO
+                                        </b>
+                                    </div>
+
+                                    <div className="setting-row">
+                                        <span>
+                                            Escenarios
+                                        </span>
+                                        <b>4</b>
+                                    </div>
+
+                                    <div className="notice">
+                                        <AlertTriangle
+                                            size={18}
+                                        />
+                                        Los modelos industriales
+                                        especializados todavía
+                                        requieren entrenamiento
+                                        y validación.
+                                    </div>
+                                </div>
+                            </div>
+                        </>
+                    )}
+                </main>
+
+                <footer>
+                    © 2026 VISION AI · Enterprise
+                    Intelligence Platform
+                    <span>
+                        {isReal
+                            ? "ENTORNO REAL · YOLO"
+                            : "ENTORNO DEMO"}
+                    </span>
+                </footer>
+            </div>
+
+            {toast && (
+                <div className="toast">
+                    <CheckCircle2 size={18} />
+                    {toast}
+                    <button
+                        type="button"
+                        onClick={() =>
+                            setToast("")
+                        }
+                    >
+                        <X size={15} />
+                    </button>
+                </div>
+            )}
+        </div>
+    );
 }
 
 function App() {
-    const [page, setPage] = useState<Page>('dashboard'), [scenario, setScenario] = useState<Scenario>('industrial'), [mode, setMode] = useState('Combinado'), [threshold, setThreshold] = useState<number>(initial.threshold ?? 75), [analyses, setAnalyses] = useState<Analysis[]>(initial.analyses ?? []), [alerts, setAlerts] = useState<Alert[]>(initial.alerts ?? []), [busy, setBusy] = useState(false), [progress, setProgress] = useState(0), [active, setActive] = useState<Analysis | null>(null), [file, setFile] = useState<string | null>(null), [fileName, setFileName] = useState(''), [error, setError] = useState(''), [filter, setFilter] = useState(''), [statusFilter, setStatusFilter] = useState('Todos'), [mobile, setMobile] = useState(false), [showBoxes, setShowBoxes] = useState(true), [showMask, setShowMask] = useState(true), [liveMode, setLiveMode] = useState(false), [workspaceMode, setWorkspaceMode] = useState<'demo' | 'real'>(() => sessionStorage.getItem('vision-ai-mode') === 'real' ? 'real' : 'demo'), [toast, setToast] = useState(''); const fileInput = useRef<HTMLInputElement>(null); const current = scenarios.find(s => s.id === scenario)!;
-    useEffect(() => { localStorage.setItem(KEY, JSON.stringify({ threshold, analyses, alerts })) }, [threshold, analyses, alerts]); useEffect(() => { if (toast) { const t = setTimeout(() => setToast(''), 3500); return () => clearTimeout(t) } }, [toast]);
-    const detected = analyses.reduce((n, a) => n + a.detections.length, 0); const avg = analyses.length ? Math.round(analyses.reduce((n, a) => n + a.confidence, 0) / analyses.length * 100) : 0; const openAlerts = alerts.filter(a => a.status === 'Nueva').length; const duration = analyses.length ? (analyses.reduce((n, a) => n + a.duration, 0) / analyses.length).toFixed(1) : '0.0'; const chart = Array.from({ length: 7 }, (_, i) => ({ day: ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'][i], value: analyses.filter((_, j) => j % 7 === i).length }));
-    function upload(f?: File) { if (!f) return; setError(''); if (!['image/png', 'image/jpeg'].includes(f.type)) { setError('Solo se permiten imágenes JPG o PNG.'); return } if (f.size > 8 * 1024 * 1024) { setError('La imagen no debe superar 8 MB.'); return } if (file) URL.revokeObjectURL(file); setFile(URL.createObjectURL(f)); setFileName(f.name); setActive(null) }
-    function run() {
-        if (busy) return; setError(''); setBusy(true); setProgress(0); let p = 0; const timer = setInterval(() => {
-            p = Math.min(100, p + 10); setProgress(p); if (p >= 100) {
-                clearInterval(timer); const detections = current.detections.filter(d => d.confidence * 100 >= threshold).filter(d => mode === 'Detección' ? d.label !== 'Defecto simulado' : mode === 'Segmentación' ? d.label.includes('Defecto') || d.label.includes('Zona') : true); const isAlert =
-                    detections.length > 0 &&
-                    mode !== 'Detección' &&
-                    mode !== 'Segmentación' &&
-                    detections.some(d =>
-                        d.label === 'Chaleco ausente' ||
-                        d.label === 'Zona restringida' ||
-                        d.label === 'Defecto simulado'
-                    ); const uid = id(); const a: Analysis = { id: uid, scenario, mode, date: new Date().toISOString(), duration: 1.8, detections, alerts: isAlert ? [`AL-${uid}`] : [], confidence: detections.length ? detections.reduce((n, d) => n + d.confidence, 0) / detections.length : 0 }; setAnalyses(v => [a, ...v]); setActive(a); if (isAlert) setAlerts(v => [{ id: `AL-${uid}`, analysisId: uid, scenario, message: current.message, severity: current.severity, status: 'Nueva', date: a.date }, ...v]); setBusy(false); setToast('Análisis DEMO completado correctamente')
-            }
-        }, 170)
+    const [user, setUser] = useState<AuthUser | null>(null);
+
+    function handleLogin(
+        token: string,
+        nextUser: AuthUser
+    ) {
+        setAccessToken(token);
+        setUser(nextUser);
     }
-    function exportCsv() { const lines = [['ID', 'Fecha', 'Escenario', 'Modo', 'Clase', 'Confianza', 'Estado'], ...analyses.flatMap(a => a.detections.length ? a.detections.map(d => [a.id, a.date, scenarios.find(s => s.id === a.scenario)?.title || '', a.mode, d.label, `${Math.round(d.confidence * 100)}%`, 'Completado']) : [[a.id, a.date, scenarios.find(s => s.id === a.scenario)?.title || '', a.mode, 'Sin detecciones', '0%', 'Completado']])]; const csv = '\ufeff' + lines.map(row => row.map(v => '"' + String(v).replace(/"/g, '""') + '"').join(',')).join('\r\n'); const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' })); const a = document.createElement('a'); a.href = url; a.download = 'vision-ai-demo-report.csv'; a.click(); URL.revokeObjectURL(url); setToast('Reporte CSV exportado') }
-    async function saveEvent(source: 'SIMULACION' | 'CAMARA_REAL', count: number) { try { const r = await fetch((import.meta.env.VITE_API_URL || 'http://localhost:8000') + '/api/v1/events', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ scenario, source, severity: current.severity, message: source === 'SIMULACION' ? current.message : 'Observación de cámara: detecciones generales (revisión humana requerida)', detections: count }) }); if (!r.ok) throw new Error('HTTP ' + r.status); setToast('Evento registrado en backend · ' + source); const a: Analysis = { id: id(), scenario, mode: source, date: new Date().toISOString(), duration: 0, detections: source === 'SIMULACION' ? current.detections : [], alerts: [], confidence: 0 }; setAnalyses(v => [a, ...v]); setActive(a) } catch (e) { setToast('No se pudo registrar evento: ' + String(e)) } }
-    function updateAlert(a: Alert, status: Alert['status']) { setAlerts(v => v.map(x => x.id === a.id ? { ...x, status } : x)); setToast(`Alerta marcada como ${status.toLowerCase()}`) }
-    const pageTitle = nav.find(n => n.id === page)?.label;
-    useEffect(() => { sessionStorage.setItem('vision-ai-mode', workspaceMode) }, [workspaceMode]);
-    const isReal = workspaceMode === 'real';
-    return <div className="shell"><aside className={'sidebar ' + (mobile ? 'mobile-open' : '')}><div className="brand"><div className="brand-icon"><ScanLine size={24} /></div><div><strong>VISION<span>AI</span></strong><small>ENTERPRISE PLATFORM</small></div></div><div className="workspace"><div className="workspace-icon">V</div><div><b>Vision Intelligence</b><small>Workspace Enterprise</small></div><ChevronDown size={14} /></div><div className="nav-label">ENTORNO ACTIVO</div><div className="environment-switch" role="group" aria-label="Seleccionar entorno">
-        <button className={!isReal ? 'chosen' : ''} onClick={() => { setWorkspaceMode('demo'); setLiveMode(false); setActive(null) }}><span className="mode-symbol">◈</span> MODO DEMO</button>
-        <button className={isReal ? 'chosen' : ''} onClick={() => { setWorkspaceMode('real'); setLiveMode(true); setActive(null) }}><span className="mode-symbol">◉</span> MODO REAL</button></div><p className="environment-caption">{isReal ? 'YOLO · cámara en vivo · registros API' : 'Escenarios animados · datos sintéticos'}</p><div className="nav-label">PLATAFORMA</div><nav>{nav.map(n => <button key={n.id} className={'nav-item ' + (page === n.id ? 'selected' : '')} onClick={() => { setPage(n.id); setMobile(false) }}><n.icon size={18} />{n.label}{n.id === 'alerts' && openAlerts > 0 && <span className="nav-count">{openAlerts}</span>}</button>)}</nav><div className="sidebar-bottom"><div className="engine-card"><div className="engine-top"><span className="pulse-dot" />MOTOR DE ANÁLISIS</div><strong>{isReal ? "FastAPI + YOLO" : "DemoVisionAdapter"}</strong><small>{isReal ? "Inferencia real · clases generales" : "Simulación sintética · sin inferencia"}</small><div className="engine-bar"><span /></div></div><div className="user"><div className="avatar">AD</div><div><b>Operador VISION AI</b><small>{isReal ? "Entorno real" : "Entorno demostrativo"}</small></div><span className="user-more">•••</span></div></div></aside><div className="main"><header className="topbar"><div className="breadcrumb"><button className="mobile-menu" onClick={() => setMobile(!mobile)}><Menu size={20} /></button><span>Plataforma</span><span className="slash">/</span><b>{pageTitle}</b></div><div className="top-actions"><div className="top-mode-actions" role="group" aria-label="Cambiar entre modo demostración y modo real"><button type="button" aria-pressed={!isReal} className={!isReal ? "top-mode-btn selected demo" : "top-mode-btn"} onClick={() => { setWorkspaceMode("demo"); setLiveMode(false); setActive(null); setPage("dashboard") }}>◈ MODO DEMO</button><button type="button" aria-pressed={isReal} className={isReal ? "top-mode-btn selected real" : "top-mode-btn"} onClick={() => { setWorkspaceMode("real"); setLiveMode(true); setActive(null); setPage("dashboard") }}>◉ MODO REAL</button></div><span className="top-divider" /><span className="top-date">17 NOV 2026</span><button className="icon-btn" onClick={() => setPage('alerts')} aria-label="Ver alertas"><Bell size={19} />{openAlerts > 0 && <i />}</button><div className="avatar mini">AD</div></div></header><main className="content">
-            {page === 'dashboard' && !isReal && <><div className="heading"><div><div className="eyebrow"><Sparkles size={14} /> INTELLIGENCE OVERVIEW</div><h1>Centro de inteligencia visual</h1><p>Visibilidad completa de tus operaciones de análisis visual.</p></div>
-                <button className="primary" onClick={() => setPage('analysis')}><Plus size={17} /> Nuevo análisis <ArrowRight size={17} /></button></div><div className="hero"><div className="hero-copy"><span className="hero-pill"><span className="pulse-dot" /> PLATAFORMA OPERATIVA · DEMO</span><h2>Transforma imágenes en<br /><em>decisiones inteligentes.</em></h2><p>Una plataforma unificada para detección, segmentación y análisis de patrones con supervisión humana.</p><button onClick={() => setPage('analysis')}>Explorar centro de análisis <ArrowRight size={16} /></button></div><div className="hero-art"><div className="orb orb-one" /><div className="orb orb-two" /><div className="hero-reticle"><ScanLine size={90} strokeWidth={.75} /></div><div className="hero-floating"><span className="pulse-dot" /> VISUAL ENGINE <b>READY</b></div></div></div><div className="section-header"><h3>Indicadores generales</h3><span>Datos de esta demostración</span></div><div className="metrics">{[{ label: 'Análisis realizados', value: analyses.length, icon: ScanLine, tag: 'Procesados en DEMO', color: 'blue' }, { label: 'Objetos detectados', value: detected, icon: Box, tag: 'Detecciones simuladas', color: 'purple' }, { label: 'Alertas pendientes', value: openAlerts, icon: AlertTriangle, tag: 'Requieren revisión', color: 'orange' }, { label: 'Confianza promedio', value: `${avg}%`, icon: Activity, tag: 'Valor de simulación', color: 'green' }].map(m => <div className="metric" key={m.label}><div className="metric-top"><span>{m.label}</span><div className={'metric-icon ' + m.color}><m.icon size={19} /></div></div><div className="metric-value">{m.value}</div><div className="metric-foot"><span className="tiny-dot" />{m.tag}</div></div>)}</div><div className="dashboard-grid"><div className="panel chart-panel"><div className="panel-title"><div><h3>Actividad de análisis</h3><p>Distribución de registros de demostración</p></div><span className="select-look">Últimos 7 días <ChevronDown size={14} /></span></div><div className="chart"><ResponsiveContainer width="100%" height="100%"><AreaChart data={chart}><defs><linearGradient id="grad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#5b8cff" stopOpacity={.23} /><stop offset="95%" stopColor="#5b8cff" stopOpacity={0} /></linearGradient></defs><CartesianGrid stroke="#243047" strokeDasharray="3 5" vertical={false} /><XAxis dataKey="day" tick={{ fill: '#8290aa', fontSize: 12 }} axisLine={false} tickLine={false} /><YAxis allowDecimals={false} tick={{ fill: '#8290aa', fontSize: 12 }} axisLine={false} tickLine={false} /><Tooltip contentStyle={{ background: '#172238', border: '1px solid #33415c', borderRadius: 12, color: 'white' }} /><Area type="monotone" dataKey="value" stroke="#719cff" strokeWidth={3} fill="url(#grad)" /></AreaChart></ResponsiveContainer></div></div><div className="panel quick-panel"><div className="panel-title"><div><h3>Escenarios disponibles</h3><p>Casos de uso empresariales</p></div><span className="small-tag">04 módulos</span></div><div className="quick-list">{scenarios.map(s => <button key={s.id} onClick={() => { setScenario(s.id); setActive(null); setPage('analysis') }}><span className="quick-icon"><s.icon size={19} /></span><span><b>{s.title}</b><small>{s.sub}</small></span><ArrowRight size={17} /></button>)}</div></div></div><div className="panel recent"><div className="panel-title"><div><h3>Actividad reciente</h3><p>Últimos análisis ejecutados en la plataforma</p></div><button className="text-button" onClick={() => setPage('history')}>Ver historial <ArrowRight size={15} /></button></div>{analyses.length === 0 ? <div className="empty"><div className="empty-icon"><Clock3 size={24} /></div><b>Aún no hay actividad reciente</b><p>Los análisis aparecerán aquí cuando ejecutes tu primera demostración.</p><button className="outline" onClick={() => setPage('analysis')}>Iniciar primer análisis</button></div> : <div className="rows">{analyses.slice(0, 4).map(a => <div className="data-row" key={a.id}><span className="row-icon"><ScanLine size={17} /></span><div><b>{scenarios.find(s => s.id === a.scenario)?.title}</b><small>{a.id} · {format(a.date)}</small></div><span className="success-tag"><Check size={13} /> Completado</span></div>)}</div>}</div></>}
-            {page === 'dashboard' && isReal && <><div className="heading"><div><div className="eyebrow">◉ ENTORNO REAL</div><h1>Operación con IA real</h1><p>Indicadores del backend · no se mezclan datos de demostración</p></div>
-                <button className="primary" onClick={() => setPage('analysis')}>Abrir cámara</button></div><div className="hero"><div className="hero-copy"><span className="hero-pill"><span className="pulse-dot" /> PLATAFORMA OPERATIVA · REAL</span><h2>Transforma imágenes en<br /><em>decisiones inteligentes.</em></h2><p>Una plataforma unificada para detección, segmentación y análisis de patrones con supervisión humana.</p><button onClick={() => setPage('analysis')}>Explorar centro de análisis <ArrowRight size={16} /></button></div><div className="hero-art"><div className="orb orb-one" /><div className="orb orb-two" /><div className="hero-reticle"><ScanLine size={90} strokeWidth={.75} /></div><div className="hero-floating"><span className="pulse-dot" /> MOTOR YOLO <b>· MODO REAL</b></div></div></div><div className="section-header"><h3>Indicadores y actividad real</h3><span>Datos del backend · sin simulaciones</span></div><BackendEvents view="dashboard" /></>}
-            {page === 'analysis' && <><div className="heading"><div><div className="eyebrow"><ScanLine size={14} /> ANALYSIS WORKSPACE</div><h1>Centro de análisis visual</h1><p>{isReal ? "Detección en vivo mediante FastAPI + YOLO." : "Cuatro escenarios animados con resultados sintéticos."}</p></div><span className="info-tag"><ShieldCheck size={16} />{isReal ? "MODO REAL · YOLO" : "MODO DEMO · SIMULADO"}</span></div><div className="analysis-layout"><div className="analysis-main"><div className="panel analysis-panel"><div className="panel-title"><div><h3>Escenario de análisis</h3><p>Selecciona el caso de uso que deseas demostrar</p></div><span className="small-tag">04 disponibles</span></div><div className="scenario-grid">{scenarios.map(s => <button key={s.id} className={'scenario-card ' + (scenario === s.id ? 'active' : '')} onClick={() => { setScenario(s.id); setActive(null); setError(''); if (file) { URL.revokeObjectURL(file); setFile(null); setFileName('') } }}><s.icon size={21} /><b>{s.title}</b><small>{s.sub}</small>{scenario === s.id && <span className="scenario-check"><Check size={12} /></span>}</button>)}</div></div><div className="panel viewer-panel"><div className="panel-title"><div><h3>Visor inteligente</h3><p>{fileName || current.title + ' · Imagen de referencia ilustrativa'}</p></div><div className="viewer-tools"><button className={showBoxes ? 'tool-active' : ''} onClick={() => setShowBoxes(!showBoxes)} title="Alternar detecciones"><Box size={16} /></button><button className={showMask ? 'tool-active' : ''} onClick={() => setShowMask(!showMask)} title="Alternar máscaras"><Layers3 size={16} /></button></div></div><div className="environment-banner">{isReal ? "Cámara real: inferencia YOLO. Las clases industriales especializadas aún no están validadas." : "Simulación: personajes y reglas sintéticas; no hay inferencia de IA."}</div>{isReal ? <LiveCamera threshold={threshold} scenario={scenario} onEvent={count => { void saveEvent('CAMARA_REAL', count) }} /> : <MotionDemo scenario={scenario} onEvent={() => { const a: Analysis = { id: id(), scenario, mode: 'DEMO', date: new Date().toISOString(), duration: 0, detections: current.detections, alerts: [], confidence: 0 }; setAnalyses(v => [a, ...v]); setActive(a); setToast('Evento DEMO guardado localmente') }} />}<div className="viewer-footer"><div><span className="legend blue" /> Detecciones <span className="legend amber" /> Alertas <span className="legend green" /> Objetos verificados</div><span>{isReal ? "Origen: backend YOLO · observaciones sujetas a revisión" : "Origen: DEMO · resultados no reales"}</span></div></div></div><div className="analysis-side"><div className="panel controls"><div className="panel-title"><div><h3>Configuración</h3><p>Parámetros de ejecución</p></div><SlidersHorizontal size={18} /></div><label className="field-label">Perfil de análisis</label><select value={mode} onChange={e => setMode(e.target.value)}><option>Combinado</option><option>Detección</option><option>Segmentación</option><option>Patrones</option></select><div className="range-title">
-                <label className="field-label">Umbral de confianza</label>
-                <b>{threshold}%</b></div><input className="range" type="range" min="20" max="99" value={threshold} onChange={e => setThreshold(Number(e.target.value))} />
-                <div className="range-label"><span>50%</span><span>99%</span></div>
-                {error && <div className="error">{error}</div>}
-                <button
-                    className="primary run"
-                    onClick={run}
-                    disabled={isReal || busy}
-                ><Play size={17} /> Registrar evento del escenario <ArrowRight size={16} />
-                </button>
-                <p className="disclaimer"><ShieldCheck size={15} /> Simulación: datos sintéticos. Cámara: detecciones reales de clases generales; sin validación de EPP o defectos.</p></div><div className="panel results"><div className="panel-title"><div><h3>Resultados</h3><p>{active ? 'Análisis ' + active.id : 'Esperando ejecución'}</p></div><span className={active ? 'success-tag' : 'small-tag'}>{active ? 'Completado' : 'Pendiente'}</span></div>{!active ? <div className="result-empty"><ScanLine size={29} /><b>Sin resultados todavía</b><span>Ejecuta un análisis para visualizar las detecciones, métricas y alertas.</span></div> : <><div className="result-stats"><div><small>Detecciones</small><b>{active.detections.length}</b></div><div><small>Confianza media</small><b>{Math.round(active.confidence * 100)}%</b></div><div><small>Tiempo simulado</small><b>{active.duration}s</b></div></div><div className="result-list">{active.detections.map((d, i) => <div key={i}><span className="legend" style={{ background: d.color }} /><b>{d.label}</b><span>{Math.round(d.confidence * 100)}%</span></div>)}</div>{active.alerts.length > 0 && <div className="inline-alert"><AlertTriangle size={17} />{current.message}</div>}</>}</div></div></div></>}
-            {page === 'alerts' && !isReal && <><div className="heading"><div><div className="eyebrow"><Bell size={14} /> INCIDENT MANAGEMENT</div><h1>Centro de alertas</h1><p>Supervisa incidencias y documenta la revisión humana.</p></div><span className="info-tag">{openAlerts} pendientes</span></div><div className="panel table-panel"><div className="panel-title"><div><h3>Alertas registradas</h3><p>Eventos generados por los análisis de demostración</p></div><select className="filter-select" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}><option>Todos</option><option>Nueva</option><option>Revisada</option><option>Cerrada</option></select></div>{alerts.filter(a => statusFilter === 'Todos' || a.status === statusFilter).length === 0 ? <div className="empty"><div className="empty-icon"><ShieldCheck size={24} /></div><b>No hay alertas para mostrar</b><p>Las alertas se generan al ejecutar escenarios con reglas activas.</p><button className="outline" onClick={() => setPage('analysis')}>Ir a análisis visual</button></div> : <div className="alert-list">{alerts.filter(a => statusFilter === 'Todos' || a.status === statusFilter).map(a => <div className="alert-item" key={a.id}><span className={'severity-icon ' + (a.severity === 'Alta' ? 'high' : 'medium')}><AlertTriangle size={20} /></span><div className="alert-description"><b>{a.message}</b><small>{scenarios.find(s => s.id === a.scenario)?.title} · {format(a.date)} · {a.analysisId}</small></div><span className={'status ' + a.status.toLowerCase()}>{a.status}</span><div className="alert-actions">{a.status === 'Nueva' && <button onClick={() => updateAlert(a, 'Revisada')}>Marcar revisada</button>}{a.status !== 'Cerrada' && <button onClick={() => updateAlert(a, 'Cerrada')}>Cerrar</button>}</div></div>)}</div>}</div></>}
-            {page === 'alerts' && isReal && <BackendEvents view="alerts" />}
-            {page === 'history' && !isReal && <><div className="heading"><div><div className="eyebrow"><Database size={14} /> AUDIT & REPORTING</div><h1>Historial y reportes</h1><p>Registro trazable de ejecuciones y resultados simulados.</p></div><button className="primary" onClick={exportCsv}><ArrowDownToLine size={17} /> Exportar CSV</button></div><div className="panel table-panel"><div className="panel-title"><div><h3>Registro de análisis</h3><p>{analyses.length} análisis almacenados localmente</p></div><div className="searchbox"><Search size={16} /><input placeholder="Buscar ID o escenario…" value={filter} onChange={e => setFilter(e.target.value)} /></div></div>{analyses.filter(a => (a.id + ' ' + scenarios.find(s => s.id === a.scenario)?.title).toLowerCase().includes(filter.toLowerCase())).length === 0 ? <div className="empty"><div className="empty-icon"><FileText size={24} /></div><b>No hay análisis registrados</b><p>Cuando ejecutes una demostración, los registros aparecerán aquí.</p><button className="outline" onClick={() => setPage('analysis')}>Crear análisis</button></div> : <div className="table-scroll"><table><thead><tr><th>IDENTIFICADOR</th><th>ESCENARIO</th><th>FECHA</th><th>DETECCIONES</th><th>CONFIANZA</th><th>ESTADO</th><th></th></tr></thead><tbody>{analyses.filter(a => (a.id + ' ' + scenarios.find(s => s.id === a.scenario)?.title).toLowerCase().includes(filter.toLowerCase())).map(a => <tr key={a.id}><td>{a.id}</td><td>{scenarios.find(s => s.id === a.scenario)?.title}</td><td>{format(a.date)}</td><td>{a.detections.length}</td><td>{Math.round(a.confidence * 100)}%</td><td><span className="success-tag"><Check size={13} /> Completado</span></td><td><button className="text-button" onClick={() => { setScenario(a.scenario); setActive(a); setPage('analysis') }}>Ver <ArrowRight size={14} /></button></td></tr>)}</tbody></table></div>}</div></>}
-            {page === 'history' && isReal && <BackendEvents view="history" />}
-            {page === 'settings' && <><div className="heading"><div><div className="eyebrow"><Settings2 size={14} /> PLATFORM CONFIGURATION</div><h1>Configuración</h1><p>{isReal ? "Configuración del entorno real." : "Configuración del entorno DEMO."}</p></div></div><div className="settings-grid"><div className="panel controls"><div className="panel-title"><div><h3>Motor de visión</h3><p>Adaptador activo y comportamiento</p></div><Zap size={20} /></div><div className="setting-row"><span>Adaptador</span><b>YOLO + simulador</b></div><div className="setting-row"><span>Tipo de ejecución</span><span className="success-tag">Local · Simulado</span></div><div className="setting-row"><span>Motor IA real</span><span className="success-tag">FastAPI · YOLO</span></div><div className="range-title"><label className="field-label">Confianza mínima</label><b>{threshold}%</b></div><input className="range" type="range" min="50" max="99" value={threshold} onChange={e => setThreshold(Number(e.target.value))} /><p className="disclaimer">Este valor se guarda localmente y se utiliza para filtrar detecciones simuladas.</p></div><div className="panel controls"><div className="panel-title"><div><h3>Acerca de VISION AI</h3><p>Información de la plataforma</p></div><ShieldCheck size={20} /></div><div className="setting-row"><span>Versión</span><b>1.0.0 DEMO</b></div><div className="setting-row"><span>Interfaz</span><b>React + TypeScript</b></div><div className="setting-row"><span>Persistencia</span><b>LocalStorage</b></div><div className="setting-row"><span>Escenarios</span><b>4 disponibles</b></div><div className="notice"><AlertTriangle size={18} /> Backend de inferencia disponible. Autenticación empresarial, modelos industriales y despliegue seguro pendientes.</div></div></div></>}
-        </main><footer>© 2026 VISION AI · Enterprise Intelligence Platform <span>{isReal ? "ENTORNO REAL · YOLO · modelos industriales pendientes" : "ENTORNO DEMO · resultados sintéticos"}</span></footer></div>{toast && <div className="toast"><CheckCircle2 size={18} />{toast}<button onClick={() => setToast('')}><X size={15} /></button></div>}</div>
+
+    function handleLogout() {
+        setAccessToken(null);
+        setUser(null);
+    }
+
+    if (!user) {
+        return <Login onLogin={handleLogin} />;
+    }
+
+    return (
+        <DashboardApp
+            user={user}
+            onLogout={handleLogout}
+        />
+    );
 }
 
-createRoot(document.getElementById('root')!).render(<React.StrictMode><App /></React.StrictMode>);
+
+createRoot(
+    document.getElementById("root")!
+).render(
+    <React.StrictMode>
+        <App />
+    </React.StrictMode>
+);

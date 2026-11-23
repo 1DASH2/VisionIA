@@ -6,6 +6,11 @@ from datetime import datetime, timezone
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from PIL import Image, UnidentifiedImageError
+from models.registry import (
+    SCENARIOS,
+    load_model,
+    model_status,
+)
 
 MODEL_NAME = os.getenv('VISION_MODEL', 'yolo11n.pt')
 DB = os.getenv('VISION_DB', 'vision_events.db')
@@ -25,13 +30,17 @@ async def lifespan(app: FastAPI):
     global model, model_error
     with connect(): pass
     try:
-        from ultralytics import YOLO
-        model = YOLO(MODEL_NAME)
+        model = load_model("general")
     except Exception as exc:
         model_error = str(exc)
     yield
 
-app = FastAPI(title='VISION AI Enterprise — Live API', version='2.0.0', lifespan=lifespan)
+app = FastAPI(
+    title='VISION AI Enterprise — Live API', 
+    version='2.0.0', 
+    lifespan=lifespan
+    )
+
 from fastapi.middleware.cors import CORSMiddleware
 
 app.add_middleware(
@@ -43,7 +52,6 @@ app.add_middleware(
         "http://127.0.0.1:5173",
         "http://127.0.0.1:5174",
         "http://127.0.0.1:5175",
-        "http://192.168.100.17:5175",
     ],
     allow_credentials=True,
     allow_methods=["GET", "POST", "PATCH", "OPTIONS"],
@@ -51,8 +59,23 @@ app.add_middleware(
 )
 
 @app.get('/api/v1/health')
+
+@app.get("/api/v1/health")
 def health():
-    return {'service':'VISION AI', 'mode':'LIVE', 'model_loaded':model is not None, 'model':MODEL_NAME, 'model_error':model_error}
+    return {
+        "service": "VISION AI",
+        "mode": "LIVE",
+        "model_loaded": model is not None,
+        "model": MODEL_NAME,
+        "model_error": model_error,
+    }
+
+@app.get("/api/v1/models")
+def get_models():
+    return {
+        "models": model_status()
+    }
+
 
 @app.post('/api/v1/live/frame')
 async def frame(request: Request, scenario: str = 'industrial', confidence: float = .35):
@@ -60,8 +83,28 @@ async def frame(request: Request, scenario: str = 'industrial', confidence: floa
         raise HTTPException(422,'Escenario inválido')
     if not .05 <= confidence <= .99:
         raise HTTPException(422,'Umbral inválido')
-    if model is None:
-        raise HTTPException(503, f'Modelo no disponible: {model_error}')
+    try:
+        available = model_status()
+
+        if available[scenario]["installed"]:
+            selected_model = load_model(scenario)
+            model_type = "SPECIALIZED" if scenario in (
+        "industrial", "warehouse", "quality"
+    ) else "GENERAL"
+        else:
+            selected_model = load_model("general")
+            model_type = "GENERAL_FALLBACK"
+            
+    except FileNotFoundError as exc:
+        raise HTTPException(
+        status_code=503,
+        detail=str(exc)
+    ) from exc
+    except Exception as exc:
+        raise HTTPException(
+        status_code=503,
+        detail="No se pudo cargar el modelo"
+    ) from exc
     if request.headers.get('content-type','').split(';')[0] != 'image/jpeg':
         raise HTTPException(415,'Se requiere un fotograma JPEG')
     raw = await request.body()
@@ -76,7 +119,11 @@ async def frame(request: Request, scenario: str = 'industrial', confidence: floa
     start = time.perf_counter()
     try:
         with lock:
-            result = model.predict(img, conf=confidence, verbose=False)[0]
+            result = selected_model.predict(
+                img,
+                conf=confidence,
+                verbose=False
+            )[0]
     except Exception as exc:
         raise HTTPException(500,'Error de inferencia') from exc
     detections=[]
@@ -84,7 +131,29 @@ async def frame(request: Request, scenario: str = 'industrial', confidence: floa
         x1,y1,x2,y2 = (float(v) for v in box.xyxy[0].tolist())
         cls = int(box.cls[0].item())
         detections.append({'label':str(result.names[cls]),'confidence':round(float(box.conf[0].item()),4),'bbox':[x1/img.width,y1/img.height,(x2-x1)/img.width,(y2-y1)/img.height]})
-    return {'mode':'REAL','scenario':scenario,'model':MODEL_NAME,'detections':detections,'elapsed_ms':round((time.perf_counter()-start)*1000,1),'width':img.width,'height':img.height,'note':'Las clases industriales especializadas requieren modelos entrenados.'}
+    return {
+    "mode": "REAL",
+    "scenario": scenario,
+    "model": (
+        model_status()[scenario]["filename"]
+        if model_type == "SPECIALIZED"
+        else model_status()["general"]["filename"]
+    ),
+    "model_type": model_type,
+    "detections": detections,
+    "elapsed_ms": round(
+        (time.perf_counter() - start) * 1000, 1
+    ),
+    "width": img.width,
+    "height": img.height,
+    "note": (
+        "Inferencia real con modelo general COCO. "
+        "Las detecciones industriales especializadas "
+        "requieren modelos entrenados."
+        if model_type != "SPECIALIZED"
+        else "Inferencia con modelo especializado."
+    ),
+}
 
 @app.get('/api/v1/events')
 def events(limit: int = 100):

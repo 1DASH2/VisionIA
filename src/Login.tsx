@@ -15,6 +15,7 @@ import "./login.css";
 const API =
     import.meta.env.VITE_API_URL ||
     "http://localhost:8000";
+const API_BASE = API.replace(/\/$/, "");
 
 export type AuthUser = {
     id: number;
@@ -40,7 +41,7 @@ export default function Login({
 
         try {
             const response = await fetch(
-                `${API}/api/v1/auth/login`,
+                `${API_BASE}/api/v1/auth/login`,
                 {
                     method: "POST",
                     headers: {
@@ -65,10 +66,11 @@ export default function Login({
 
             onLogin(data.access_token, data.user);
         } catch (err) {
+            const message = err instanceof Error ? err.message : "";
             setError(
-                err instanceof Error
-                    ? err.message
-                    : "Error de conexión."
+                message === "Failed to fetch" || message.includes("NetworkError")
+                    ? `No se pudo conectar con FastAPI (${API_BASE}). Inicia el backend en el puerto 8000 y revisa la URL.`
+                    : message || "Error de conexión."
             );
         } finally {
             setLoading(false);

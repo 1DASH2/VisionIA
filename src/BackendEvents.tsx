@@ -1,3 +1,4 @@
+import { authHeaders } from './auth';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
@@ -49,7 +50,7 @@ export default function BackendEvents({ view, onScenario }: Props) {
 
   const refresh = useCallback(async () => {
     try {
-      const response = await fetch(`${API}/api/v1/events?limit=500`);
+      const response = await fetch(`${API.replace(/\/$/, "")}/api/v1/events?limit=500`, { headers: authHeaders() });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data: EventRow[] = await response.json();
       setRows(data.filter(r => r.source === 'CAMARA_REAL'));
@@ -95,9 +96,9 @@ export default function BackendEvents({ view, onScenario }: Props) {
   async function change(id: string, status: EventStatus) {
     setBusy(id);
     try {
-      const response = await fetch(`${API}/api/v1/events/${id}`, {
+      const response = await fetch(`${API.replace(/\/$/, "")}/api/v1/events/${id}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify({ status })
       });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);

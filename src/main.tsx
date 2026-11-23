@@ -876,7 +876,7 @@ function DashboardApp({
         async function checkBackend() {
             try {
                 const response = await fetch(
-                    `${API}/api/v1/health`
+                    `${API.replace(/\/$/, "")}/api/v1/health`
                 );
 
                 if (!response.ok) {
@@ -1057,11 +1057,12 @@ function DashboardApp({
 
         try {
             const response = await fetch(
-                `${API}/api/v1/events`,
+                `${API.replace(/\/$/, "")}/api/v1/events`,
                 {
                     method: "POST",
                     headers: {
                         "Content-Type": "application/json",
+                        ...authHeaders(),
                     },
                     body: JSON.stringify({
                         scenario,

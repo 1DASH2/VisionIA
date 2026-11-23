@@ -1,7 +1,11 @@
 """VISION AI live inference API. Frames are ephemeral; only event metadata is stored."""
 from contextlib import asynccontextmanager
 from io import BytesIO
+from pathlib import Path
 import os, time, sqlite3, threading, uuid
+from dotenv import load_dotenv
+
+load_dotenv(Path(__file__).with_name(".env"))
 from datetime import datetime, timezone
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -50,18 +54,12 @@ app = FastAPI(
     lifespan=lifespan
     )
 
-from fastapi.middleware.cors import CORSMiddleware
-
+# Permite los puertos de Vite en localhost y orígenes explícitos para producción.
+allowed_origins = [origin.strip() for origin in os.getenv("VISION_CORS_ORIGINS", "").split(",") if origin.strip()]
 app.add_middleware(
-       CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://localhost:5174",
-        "http://localhost:5175",
-        "http://127.0.0.1:5173",
-        "http://127.0.0.1:5174",
-        "http://127.0.0.1:5175",
-    ],
+    CORSMiddleware,
+    allow_origins=allowed_origins,
+    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -109,11 +107,6 @@ def me(user: dict = Depends(current_user)):
     }
 
 
-@app.get(
-    "/api/v1/events",
-    dependencies=[Depends(current_user)],
-)
-
 @app.get("/api/v1/health")
 def health():
     return {
@@ -124,14 +117,14 @@ def health():
         "model_error": model_error,
     }
 
-@app.get("/api/v1/models")
+@app.get("/api/v1/models", dependencies=[Depends(current_user)])
 def get_models():
     return {
         "models": model_status()
     }
 
 
-@app.post('/api/v1/live/frame')
+@app.post('/api/v1/live/frame', dependencies=[Depends(current_user)])
 async def frame(request: Request, scenario: str = 'industrial', confidence: float = .35):
     if scenario not in ('industrial','warehouse','quality','retail'):
         raise HTTPException(422,'Escenario inválido')
@@ -209,12 +202,12 @@ async def frame(request: Request, scenario: str = 'industrial', confidence: floa
     ),
 }
 
-@app.get('/api/v1/events')
+@app.get('/api/v1/events', dependencies=[Depends(current_user)])
 def events(limit: int = 100):
     with connect() as db:
         return [dict(r) for r in db.execute('SELECT * FROM events ORDER BY timestamp DESC LIMIT ?', (max(1,min(limit,500)),))]
 
-@app.post('/api/v1/events')
+@app.post('/api/v1/events', dependencies=[Depends(current_user)])
 async def add_event(request: Request):
     data=await request.json()
     scenario=data.get('scenario')
@@ -229,7 +222,7 @@ async def add_event(request: Request):
         db.commit()
     return event
 
-@app.patch('/api/v1/events/{event_id}')
+@app.patch('/api/v1/events/{event_id}', dependencies=[Depends(current_user)])
 async def review(event_id: str, request: Request):
     status=(await request.json()).get('status')
     if status not in ('Nueva','Revisada','Cerrada'):
@@ -240,7 +233,7 @@ async def review(event_id: str, request: Request):
         if not cursor.rowcount: raise HTTPException(404,'Evento no encontrado')
     return {'id':event_id,'status':status}
 
-@app.get('/api/v1/dashboard')
+@app.get('/api/v1/dashboard', dependencies=[Depends(current_user)])
 def dashboard():
     with connect() as db:
         total=db.execute('SELECT COUNT(*) FROM events').fetchone()[0]

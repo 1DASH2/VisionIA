@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from PIL import Image, UnidentifiedImageError
+from scenario_rules import evaluate
 from models.registry import (
     SCENARIOS,
     load_model,
@@ -178,7 +179,11 @@ async def frame(request: Request, scenario: str = 'industrial', confidence: floa
         x1,y1,x2,y2 = (float(v) for v in box.xyxy[0].tolist())
         cls = int(box.cls[0].item())
         detections.append({'label':str(result.names[cls]),'confidence':round(float(box.conf[0].item()),4),'bbox':[x1/img.width,y1/img.height,(x2-x1)/img.width,(y2-y1)/img.height]})
+    rules = evaluate(scenario, detections, result.names, model_type == "SPECIALIZED")
+    ppe = rules.get("ppe")
     return {
+    "ppe": ppe,
+    "rules": rules,
     "mode": "REAL",
     "scenario": scenario,
     "model": (

@@ -2037,3 +2037,8 @@ footer {
 .quick-list button:active {
     background: rgba(91, 140, 255, 0.17);
 }
+/* Visor tipo cámara sin reproducción de video */
+.detection-stage { display: block; width: 100%; height: auto; background: #101e2e; }
+.demo-status { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px; padding: 10px 18px; color: #c5dff0; font-size: 13px; border-top: 1px solid #28425a; }
+.detection-demo .motion-controls { flex-wrap: wrap; }
+.detection-demo .motion-controls span { color: #8cb4d1; font-size: 12px; }

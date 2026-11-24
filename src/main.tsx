@@ -296,372 +296,106 @@ function newId() {
     return `VA-${Date.now().toString(36).toUpperCase()}`;
 }
 
-function MotionDemo({
-    scenario,
-}: {
-    scenario: Scenario;
-}) {
-    const [playing, setPlaying] = useState(true);
-    const [tick, setTick] = useState(0);
+type DemoBox = { label: string; confidence: number; x: number; y: number; w: number; h: number; alert?: boolean };
 
+const demoDetections: Record<Scenario, DemoBox[][]> = {
+    industrial: [
+        [{ label: "persona", confidence: 96, x: 172, y: 88, w: 150, h: 198 }, { label: "casco", confidence: 92, x: 214, y: 90, w: 67, h: 39 }, { label: "chaleco", confidence: 94, x: 199, y: 153, w: 97, h: 81 }, { label: "persona", confidence: 93, x: 485, y: 88, w: 145, h: 198 }, { label: "sin casco", confidence: 90, x: 513, y: 88, w: 80, h: 47, alert: true }],
+        [{ label: "persona", confidence: 95, x: 172, y: 88, w: 150, h: 198 }, { label: "casco", confidence: 91, x: 214, y: 90, w: 67, h: 39 }, { label: "chaleco", confidence: 93, x: 199, y: 153, w: 97, h: 81 }, { label: "persona", confidence: 94, x: 485, y: 88, w: 145, h: 198 }, { label: "EPP incompleto", confidence: 89, x: 490, y: 153, w: 133, h: 83, alert: true }],
+    ],
+    warehouse: [
+        [{ label: "pallet", confidence: 92, x: 70, y: 210, w: 260, h: 42 }, { label: "caja", confidence: 95, x: 92, y: 116, w: 78, h: 90 }, { label: "caja", confidence: 93, x: 178, y: 116, w: 77, h: 90 }, { label: "montacargas", confidence: 91, x: 412, y: 154, w: 206, h: 140, alert: true }],
+        [{ label: "pallet", confidence: 91, x: 70, y: 210, w: 260, h: 42 }, { label: "caja", confidence: 94, x: 92, y: 116, w: 78, h: 90 }, { label: "caja", confidence: 95, x: 178, y: 116, w: 77, h: 90 }, { label: "intrusión zona", confidence: 88, x: 412, y: 154, w: 206, h: 140, alert: true }],
+    ],
+    quality: [
+        [{ label: "producto conforme", confidence: 97, x: 105, y: 131, w: 145, h: 105 }, { label: "producto", confidence: 96, x: 328, y: 131, w: 145, h: 105 }, { label: "defecto", confidence: 88, x: 373, y: 157, w: 54, h: 48, alert: true }, { label: "producto conforme", confidence: 95, x: 552, y: 131, w: 145, h: 105 }],
+        [{ label: "producto conforme", confidence: 98, x: 105, y: 131, w: 145, h: 105 }, { label: "NO CONFORME", confidence: 92, x: 328, y: 131, w: 145, h: 105, alert: true }, { label: "grieta", confidence: 89, x: 373, y: 157, w: 54, h: 48, alert: true }, { label: "producto conforme", confidence: 96, x: 552, y: 131, w: 145, h: 105 }],
+    ],
+    retail: [
+        [{ label: "estante", confidence: 94, x: 42, y: 63, w: 191, h: 211 }, { label: "producto", confidence: 91, x: 68, y: 105, w: 61, h: 56 }, { label: "persona", confidence: 96, x: 302, y: 89, w: 124, h: 203 }, { label: "persona", confidence: 93, x: 444, y: 105, w: 117, h: 187 }, { label: "estante", confidence: 95, x: 582, y: 63, w: 183, h: 211 }],
+        [{ label: "estante", confidence: 94, x: 42, y: 63, w: 191, h: 211 }, { label: "producto", confidence: 92, x: 68, y: 105, w: 61, h: 56 }, { label: "persona", confidence: 97, x: 302, y: 89, w: 124, h: 203 }, { label: "persona", confidence: 94, x: 444, y: 105, w: 117, h: 187 }, { label: "ocupación alta", confidence: 87, x: 292, y: 82, w: 278, h: 217, alert: true }],
+    ],
+};
+
+function MotionDemo({ scenario }: { scenario: Scenario }) {
+    const [active, setActive] = useState(true);
+    const [sample, setSample] = useState(0);
+    useEffect(() => { setSample(0); setActive(true); }, [scenario]);
     useEffect(() => {
-        setTick(0);
-        setPlaying(true);
-    }, [scenario]);
-
-    useEffect(() => {
-        if (!playing) return;
-
-        const timer = window.setInterval(() => {
-            setTick((previous) => (previous + 0.05) % 12);
-        }, 50);
-
+        if (!active) return;
+        const timer = window.setInterval(() => setSample((n) => n + 1), 2400);
         return () => window.clearInterval(timer);
-    }, [playing]);
-
-    const current = scenarios.find(
-        (item) => item.id === scenario
-    )!;
-
-    const position = Math.sin(tick) * 35;
-
+    }, [active]);
+    const current = scenarios.find((item) => item.id === scenario)!;
+    const boxes = demoDetections[scenario][sample % 2];
+    const hasAlert = boxes.some((box) => box.alert);
     return (
-        <div className="motion-demo">
+        <div className="motion-demo detection-demo">
             <div className="motion-head">
-                <div>
-                    <strong>
-                        <span className="pulse-dot" />
-                        {" "}SIMULACIÓN ANIMADA
-                    </strong>
-                    <small>
-                        {current.title} · Datos sintéticos,
-                        no inferencia real
-                    </small>
-                </div>
-                <span className="motion-live">
-                    {playing
-                        ? "● EN REPRODUCCIÓN"
-                        : "Ⅱ PAUSADO"}
-                </span>
+                <div><strong><span className="pulse-dot" /> VISOR DE DETECCIÓN · DEMO</strong>
+                    <small>{current.title} · Escena ilustrada fija, recuadros y datos sintéticos. NO es inferencia real.</small></div>
+                <span className="motion-live">{active ? "● SIMULACIÓN ACTIVA" : "Ⅱ PAUSADA"}</span>
             </div>
-
-            <svg
-                className="motion-stage"
-                viewBox="0 0 800 350"
-                role="img"
-                aria-label={`Simulación de ${current.title}`}
-            >
-                <defs>
-                    <linearGradient
-                        id="demoBackground"
-                        x1="0"
-                        y1="0"
-                        x2="0"
-                        y2="1"
-                    >
-                        <stop
-                            offset="0"
-                            stopColor="#142c49"
-                        />
-                        <stop
-                            offset="1"
-                            stopColor="#091525"
-                        />
-                    </linearGradient>
-                </defs>
-
-                <rect
-                    width="800"
-                    height="350"
-                    fill="url(#demoBackground)"
-                />
-
-                <path
-                    d="M0 250H800V350H0Z"
-                    fill="#152b43"
-                />
-
-                {scenario === "industrial" && (
-                    <>
-                        <path
-                            d="M60 250V80H220V250M580 250V80H740V250"
-                            stroke="#536c83"
-                            strokeWidth="12"
-                            fill="none"
-                        />
-                        {[250, 470].map((x, index) => (
-                            <g
-                                key={index}
-                                transform={`translate(${x + position * (index ? -1 : 1)
-                                    } 0)`}
-                            >
-                                <circle
-                                    cx="0"
-                                    cy="135"
-                                    r="17"
-                                    fill="#f4c99e"
-                                />
-                                <rect
-                                    x="-20"
-                                    y="155"
-                                    width="40"
-                                    height="65"
-                                    rx="6"
-                                    fill={
-                                        index === 0
-                                            ? "#ffce55"
-                                            : "#3677b7"
-                                    }
-                                />
-                                <path
-                                    d="M-10 220L-16 250M10 220L16 250"
-                                    stroke="#a8b9d1"
-                                    strokeWidth="10"
-                                />
-                                <rect
-                                    x="-30"
-                                    y="105"
-                                    width="60"
-                                    height="130"
-                                    fill="none"
-                                    stroke={
-                                        index === 0
-                                            ? "#49d6ee"
-                                            : "#ffae68"
-                                    }
-                                    strokeWidth="3"
-                                    strokeDasharray="8 5"
-                                />
-                            </g>
-                        ))}
-                        <text
-                            x="35"
-                            y="40"
-                            fill="#b5d9f1"
-                            fontSize="17"
-                        >
-                            MONITOREO DE PERSONAL · DEMO
-                        </text>
-                    </>
-                )}
-
-                {scenario === "warehouse" && (
-                    <>
-                        {[0, 1, 2].map((row) => (
-                            <g key={row}>
-                                <rect
-                                    x="60"
-                                    y={70 + row * 55}
-                                    width="270"
-                                    height="40"
-                                    fill="#56718c"
-                                />
-                                {[0, 1, 2, 3].map((column) => (
-                                    <rect
-                                        key={column}
-                                        x={75 + column * 65}
-                                        y={78 + row * 55}
-                                        width="45"
-                                        height="30"
-                                        fill="#b88957"
-                                    />
-                                ))}
-                            </g>
-                        ))}
-                        <rect
-                            x="475"
-                            y="75"
-                            width="275"
-                            height="170"
-                            fill="#f5a44416"
-                            stroke="#ffb76b"
-                            strokeWidth="3"
-                            strokeDasharray="10 7"
-                        />
-                        <rect
-                            x={355 + position * 3}
-                            y="205"
-                            width="105"
-                            height="45"
-                            rx="7"
-                            fill="#f0ae42"
-                        />
-                        <text
-                            x="495"
-                            y="110"
-                            fill="#ffcd91"
-                            fontSize="17"
-                        >
-                            ZONA RESTRINGIDA
-                        </text>
-                    </>
-                )}
-
-                {scenario === "quality" && (
-                    <>
-                        <rect
-                            x="20"
-                            y="175"
-                            width="760"
-                            height="75"
-                            rx="12"
-                            fill="#405c75"
-                        />
-                        {[0, 1, 2, 3, 4].map((index) => (
-                            <g
-                                key={index}
-                                transform={`translate(${((index * 175 + tick * 60) % 1000) -
-                                    120
-                                    } 0)`}
-                            >
-                                <rect
-                                    y="145"
-                                    width="110"
-                                    height="80"
-                                    rx="7"
-                                    fill={
-                                        index === 2
-                                            ? "#b87a4e"
-                                            : "#75aeca"
-                                    }
-                                />
-                                {index === 2 && (
-                                    <path
-                                        d="M35 175L65 160L80 190L50 205Z"
-                                        fill="#fa714f"
-                                    />
-                                )}
-                            </g>
-                        ))}
-                        <text
-                            x="30"
-                            y="40"
-                            fill="#b5d9f1"
-                            fontSize="17"
-                        >
-                            INSPECCIÓN DE PRODUCTOS · DEMO
-                        </text>
-                    </>
-                )}
-
-                {scenario === "retail" && (
-                    <>
-                        {[50, 560].map((x) => (
-                            <g key={x}>
-                                <rect
-                                    x={x}
-                                    y="65"
-                                    width="190"
-                                    height="185"
-                                    fill="#2c465e"
-                                    stroke="#7294ae"
-                                    strokeWidth="4"
-                                />
-                                {[0, 1, 2].map((row) => (
-                                    <path
-                                        key={row}
-                                        d={`M${x + 10} ${120 + row * 50
-                                            }H${x + 180}`}
-                                        stroke="#8ba7bc"
-                                        strokeWidth="7"
-                                    />
-                                ))}
-                            </g>
-                        ))}
-                        {[310, 420].map((x, index) => (
-                            <g
-                                key={index}
-                                transform={`translate(${x + position * (index ? -1 : 1)
-                                    } 0)`}
-                            >
-                                <circle
-                                    cx="0"
-                                    cy="150"
-                                    r="16"
-                                    fill="#f4c99e"
-                                />
-                                <rect
-                                    x="-19"
-                                    y="170"
-                                    width="38"
-                                    height="60"
-                                    rx="7"
-                                    fill="#7f9fe6"
-                                />
-                                <path
-                                    d="M-10 230L-15 250M10 230L15 250"
-                                    stroke="#a8b9d1"
-                                    strokeWidth="9"
-                                />
-                            </g>
-                        ))}
-                        <text
-                            x="30"
-                            y="40"
-                            fill="#b5d9f1"
-                            fontSize="17"
-                        >
-                            FLUJO DE CLIENTES · DEMO
-                        </text>
-                    </>
-                )}
-
-                <path
-                    d={`M${(tick / 12) * 800} 0V350`}
-                    stroke="#50dcf6"
-                    strokeWidth="2"
-                    opacity=".45"
-                />
-
-                <rect
-                    x="20"
-                    y="305"
-                    width="760"
-                    height="27"
-                    rx="5"
-                    fill="#071424bb"
-                />
-
-                <text
-                    x="32"
-                    y="324"
-                    fill="#c3e4fb"
-                    fontSize="12"
-                >
-                    VISION AI · MOTOR DE SIMULACIÓN
-                </text>
+            <svg className="motion-stage detection-stage" viewBox="0 0 800 350" role="img" aria-label={`Visor de detección simulada de ${current.title}`}>
+                <defs><linearGradient id="cameraBg" x1="0" y1="0" x2="0" y2="1"><stop stopColor="#20394e"/><stop offset="1" stopColor="#101e2e"/></linearGradient></defs>
+                <rect width="800" height="350" fill="url(#cameraBg)" />
+                <path d="M0 285H800V350H0Z" fill="#34465a" />
+                {scenario === "industrial" && <>
+                    <path d="M70 280V65H130M670 280V65H725" stroke="#52697b" strokeWidth="13" fill="none" />
+                    {[247, 558].map((x, i) => <g key={i}>
+                        <path d={`M${x-20} 230L${x-32} 286M${x+20} 230L${x+32} 286`} stroke="#657e97" strokeWidth="18" />
+                        <rect x={x-37} y="152" width="74" height="81" rx="9" fill={i ? "#456d9a" : "#d7a644"} />
+                        <path d={`M${x-37} 169L${x+37} 207M${x+37} 169L${x-37} 207`} stroke={i ? "#7c93ab" : "#e6ef8c"} strokeWidth="8" />
+                        <circle cx={x} cy="115" r="29" fill="#d6a987" />
+                        {!i && <path d={`M${x-32} 112Q${x} 63 ${x+32} 112Z`} fill="#f2d04b" />}
+                    </g>)}
+                </>}
+                {scenario === "warehouse" && <>
+                    <rect x="45" y="76" width="300" height="180" fill="#4c6174" />
+                    {[0,1,2].map(r => <g key={r}><rect x="52" y={128+r*53} width="285" height="9" fill="#9cabb5" />
+                        {[0,1,2].map(c => <rect key={c} x={80+c*88} y={88+r*53} width="66" height="37" fill="#ae845b" />)}</g>)}
+                    <rect x="70" y="249" width="260" height="12" fill="#92724c" />
+                    <path d="M535 175H750V290H535Z" fill="#e69c3820" stroke="#ffb25c" strokeWidth="3" strokeDasharray="9 6" />
+                    <text x="552" y="194" fill="#ffbd73" fontSize="15">ZONA RESTRINGIDA</text>
+                    <rect x="440" y="220" width="140" height="55" rx="9" fill="#d99d39" />
+                    <path d="M520 220V160H588V274" fill="none" stroke="#d99d39" strokeWidth="11" />
+                    <circle cx="468" cy="279" r="17" fill="#111e2b" /><circle cx="559" cy="279" r="17" fill="#111e2b" />
+                </>}
+                {scenario === "quality" && <>
+                    <rect x="25" y="225" width="750" height="58" rx="10" fill="#667a8b" />
+                    {[0,1,2].map(i => <g key={i}><rect x={105+i*223} y="132" width="145" height="104" rx="7" fill={i===1 ? "#bf906e" : "#82a7b6"} />
+                        <rect x={119+i*223} y="145" width="117" height="76" rx="4" fill={i===1 ? "#d6aa87" : "#a9c6cf"} /></g>)}
+                    <path d="M388 163L404 179L385 193L416 204" fill="none" stroke="#8e302c" strokeWidth="6" />
+                    {[80,220,360,500,640].map(x => <circle key={x} cx={x} cy="268" r="7" fill="#2b4054" />)}
+                </>}
+                {scenario === "retail" && <>
+                    {[43,583].map(x => <g key={x}><rect x={x} y="63" width="181" height="211" fill="#506477" />
+                        {[0,1,2].map(r => <g key={r}><rect x={x+9} y={110+r*55} width="163" height="8" fill="#9ba9b2" />
+                            {[0,1,2,3].map(c => <rect key={c} x={x+18+c*38} y={81+r*55} width="26" height="27" fill={c%2 ? "#d8a565" : "#82a9bf"} />)}</g>)}</g>)}
+                    {[365,501].map((x,i) => <g key={i}><circle cx={x} cy="119" r="26" fill="#cda78c" />
+                        <rect x={x-33} y="150" width="66" height="80" rx="9" fill={i ? "#b86c7b" : "#4c93b8"} />
+                        <path d={`M${x-17} 230L${x-23} 285M${x+17} 230L${x+23} 285`} stroke="#7f94a9" strokeWidth="15" /></g>)}
+                </>}
+                <rect x="10" y="10" width="226" height="29" rx="5" fill="#081623cc" />
+                <text x="20" y="30" fill="#bde9fb" fontSize="13">VISION IA · CÁMARA VIRTUAL DEMO</text>
+                {boxes.map((box, index) => {
+                    const color = box.alert ? "#ffad66" : "#46e0c1";
+                    const labelWidth = Math.min(210, Math.max(94, box.label.length * 8 + 53));
+                    const labelY = box.y > 44 ? box.y - 26 : box.y;
+                    return <g key={`${index}-${box.label}`}>
+                        <rect x={box.x} y={box.y} width={box.w} height={box.h} fill="none" stroke={color} strokeWidth="3" />
+                        <rect x={box.x} y={labelY} width={labelWidth} height="25" fill={color} rx="2" />
+                        <text x={box.x+6} y={labelY+17} fill="#09202b" fontSize="14" fontWeight="700">{box.label} {box.confidence}%</text>
+                    </g>;
+                })}
+                <rect x="12" y="313" width="776" height="26" rx="5" fill="#061524e6" />
+                <text x="23" y="331" fill="#b8d6ea" fontSize="12">SIMULACIÓN · {boxes.length} DETECCIONES · MUESTRA {sample+1} · SIN CÁMARA NI VIDEO</text>
             </svg>
-
+            <div className="demo-status"><span>{hasAlert ? "⚠ Alerta simulada: revisar detección" : "✓ Sin alertas simuladas"}</span><span>{boxes.length} objetos · Confianza sintética</span></div>
             <div className="motion-controls">
-                <button
-                    type="button"
-                    onClick={() =>
-                        setPlaying((value) => !value)
-                    }
-                >
-                    {playing ? "Ⅱ Pausar" : "▶ Reproducir"}
-                </button>
-
-                <button
-                    type="button"
-                    onClick={() => setTick(0)}
-                >
-                    ↺ Reiniciar
-                </button>
-
-                <input
-                    aria-label="Posición de simulación"
-                    type="range"
-                    min="0"
-                    max="12"
-                    step="0.05"
-                    value={tick}
-                    onChange={(event) =>
-                        setTick(Number(event.target.value))
-                    }
-                />
-
-                <span>{tick.toFixed(1)}s / 12s</span>
+                <button type="button" onClick={() => setActive(v => !v)}>{active ? "Ⅱ Pausar" : "▶ Reanudar"}</button>
+                <button type="button" onClick={() => setSample(n => n+1)}>↻ Nueva detección</button>
+                <span>La escena es fija; solo cambian los resultados simulados.</span>
             </div>
         </div>
     );
@@ -1809,7 +1543,7 @@ function DashboardApp({
                                         <div className="environment-banner">
                                             {isReal
                                                 ? "Inferencia real con YOLO. Las clases especializadas requieren modelos entrenados."
-                                                : "Simulación animada: resultados sintéticos."}
+                                                : "Visor de detección simulado: escena fija, recuadros y resultados sintéticos (sin video)."}
                                         </div>
 
                                         {isReal ? (
